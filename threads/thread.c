@@ -294,18 +294,30 @@ thread_exit (void) {
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+// 현재 실행 중인 스레드를 CPU에서 양보하고 현재 스레드를 스케줄러에 다시 예약할수 있도록 한다.
 void
 thread_yield (void) {
+	//현재 실행중인 스레드에 대한 포인터
 	struct thread *curr = thread_current ();
+	// 인터럽트 레벨을 저장할 변수
 	enum intr_level old_level;
-
+	// 이게 지금 인터럽트 컨텍스트에서 실행되었나? 
+	// 인터럽트 컨텍스트에서는 스레드를 양보하거나 대기시키는것은 안전하지 않다
 	ASSERT (!intr_context ());
-
+	
+	//현재 인터럽트를 비활성화 하고 그 이전의 인터럽트 레벨을 저장
 	old_level = intr_disable ();
+	// 현재 스레드가 idle 스레드가가 아니라면 현재 스레드를 준비 큐에 다시 넣는다. 
+	// 즉 실행중인 스레드를 준비큐에 넣어 다음에 스케줄리 될 수 있도록 한다.  
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem);
+	// 현재 스레드를 준비 큐에 넣고 스케줄링을 수행한다.
 	do_schedule (THREAD_READY);
+	// 인터럽트 레벨로 복원한다.
 	intr_set_level (old_level);
+
+// 현재 실행 중인 스레드를 양보하고 만약 idle스레드가 아니라면 해당 스레드를 준비큐에 넣어
+// 다른스레드가 CPU를 사용할수 있도록 한다.
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
