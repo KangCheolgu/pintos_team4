@@ -49,14 +49,23 @@ sema_init (struct semaphore *sema, unsigned value) {
 	list_init (&sema->waiters);
 }
 
-/* Down or "P" operation on a semaphore.  Waits for SEMA's value
+/*
+   value의 값이 양수가 될때 까지 기다렸다가 sema의 value를 0으로 만들어 들어올수 없도록 함
+
+   세마포어(SEMA)의 값을 양수가 될 때까지 대기하고, 그 후에 원자적으로 값을 감소시킵니다.
+   이 함수는 슬립(sleep)할 수 있으므로, 이 함수는 인터럽트 핸들러 내에서 호출해서는 안 됩니다.
+   이 함수는 인터럽트가 비활성화된 상태에서 호출될 수 있지만, 슬립하는 경우에는 다음 스케줄된 스레드가 아마도 다시 인터럽트를 활성화할 것입니다.
+   이것은 sema_down 함수입니다.
+
+   Down or "P" operation on a semaphore.  Waits for SEMA's value
    to become positive and then atomically decrements it.
 
-   This function may sleep, so it must not be called within an
+   This function my sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. This is
-   sema_down function. */
+   sema_down function. 
+*/
 void
 sema_down (struct semaphore *sema) {
 	enum intr_level old_level;
@@ -73,7 +82,13 @@ sema_down (struct semaphore *sema) {
 	intr_set_level (old_level);
 }
 
-/* Down or "P" operation on a semaphore, but only if the
+/*
+   세마포어(SEMA)에 대한 "P(Proberen)" 또는 "Down" 연산을 수행하지만, 세마포어의 값이 이미 0인 경우에는 연산을 수행하지 않고,
+   바로 false를 반환합니다. 세마포어가 성공적으로 감소되면 true를 반환합니다.
+
+   이 함수는 인터럽트 핸들러에서 호출될 수 있습니다. 
+
+   Down or "P" operation on a semaphore, but only if the
    semaphore is not already 0.  Returns true if the semaphore is
    decremented, false otherwise.
 
@@ -98,7 +113,13 @@ sema_try_down (struct semaphore *sema) {
 	return success;
 }
 
-/* Up or "V" operation on a semaphore.  Increments SEMA's value
+/* 
+   세마포어(SEMA)에 대한 "V(Verhogen)" 또는 "Up" 연산을 수행합니다. 이 함수는 세마포어의 값을 1 증가시키고,
+   대기 중인 스레드 중 하나를 깨워서 실행 가능한 상태로 만듭니다.
+
+   이 함수는 인터럽트 핸들러에서 호출될 수 있습니다.
+
+   Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
@@ -118,7 +139,11 @@ sema_up (struct semaphore *sema) {
 
 static void sema_test_helper (void *sema_);
 
-/* Self-test for semaphores that makes control "ping-pong"
+/* 
+   세마포어에 대한 자체 테스트 코드입니다. 이 코드는 두 개의 스레드 간에 제어를 "ping-pong"하는 방식으로 동작합니다.
+   코드의 실행 상황을 확인하기 위해 printf() 함수 호출을 삽입하세요.
+
+   Self-test for semaphores that makes control "ping-pong"
    between a pair of threads.  Insert calls to printf() to see
    what's going on. */
 void

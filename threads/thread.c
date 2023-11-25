@@ -15,6 +15,7 @@
 #include "userprog/process.h"
 #endif
 
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -109,6 +110,7 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&sleep_list);
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -210,6 +212,51 @@ thread_create (const char *name, int priority,
 	return tid;
 }
 
+/*  현재 스레드의 상태를 블락으로 바꾸고 
+	슬립 리스트에 넣고
+	깨어날 시간을 알아야 한다.  */
+void
+thread_sleep (int sleep_ticks) {
+	struct thread *curr = thread_current();
+	enum intr_level old_level;
+	// 받은 매개변수 sleep_ticks와 전체 timer_tick 가 같을 때 깨워야 한다.
+
+	// 이 동작중 인터럽트를 막는다.
+	ASSERT (!intr_context ());
+	old_level = intr_disable ();
+	// 현재 스레드의 상태를 블락으로 바꾼다
+
+	// 슬립리스트에 넣는다 list_push_back을 사용하면 될것같다.
+	if (curr != idle_thread) {
+		curr->awake_ticks = sleep_ticks;
+		list_push_back (&sleep_list, &curr->elem);
+		thread_block();
+	}
+	intr_set_level (old_level);
+}
+/*
+	sleep_list 에 있는 쓰레드들 중에 awake ticks 가 total ticks 보다 작은 경우 깨운다.
+*/
+void thread_wakeup(int total_ticks) {
+
+	enum intr_level old_level;
+	struct list_elem *ptr = list_begin(&sleep_list);
+	struct thread *waken;
+	// 이 동작중 인터럽트를 막는다.
+	old_level = intr_disable ();	
+
+	while(ptr != list_end (&sleep_list)){
+		waken = list_entry (ptr, struct thread, elem);
+		if (waken->awake_ticks <= total_ticks) {
+			ptr = list_remove(&waken->elem);
+			thread_unblock(waken);	
+		} else {
+			ptr = list_next(&waken->elem);	
+		}
+	}
+	intr_set_level (old_level);	
+}
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -299,15 +346,16 @@ void
 thread_yield (void) {
 	//현재 실행중인 스레드에 대한 포인터
 	struct thread *curr = thread_current ();
+	// printf("current thread name : %s\n",curr->name);
 	// 인터럽트 레벨을 저장할 변수
 	enum intr_level old_level;
 	// 이게 지금 인터럽트 컨텍스트에서 실행되었나? 
 	// 인터럽트 컨텍스트에서는 스레드를 양보하거나 대기시키는것은 안전하지 않다
+	// 외부 인터럽트 처리중이면 true를 반환한다. 즉 외부 인터럽트 처리중이면 통과할수 없다.
 	ASSERT (!intr_context ());
-	
-	//현재 인터럽트를 비활성화 하고 그 이전의 인터럽트 레벨을 저장
+	// 현재 인터럽트를 비활성화 하고 그 이전의 인터럽트 레벨을 저장
 	old_level = intr_disable ();
-	// 현재 스레드가 idle 스레드가가 아니라면 현재 스레드를 준비 큐에 다시 넣는다. 
+	// idle 스레드가 아니라면 현재 스레드를 준비 큐에 다시 넣는다. 
 	// 즉 실행중인 스레드를 준비큐에 넣어 다음에 스케줄리 될 수 있도록 한다.  
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem);

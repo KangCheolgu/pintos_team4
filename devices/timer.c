@@ -105,14 +105,14 @@ timer_elapsed (int64_t then) {
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
-// busy wait 방식
 void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 	ASSERT (intr_get_level () == INTR_ON);
-	// 이건 busy waiting 방식으로 계속 thread yield 를 계속 한다. 다른 방식으로 구현 해야 한다.
-	while (timer_elapsed (start) < ticks)
-		thread_yield();
+	printf("타이머 슬립 진입");
+	thread_sleep(start + ticks);
+	struct thread *fff = list_entry(list_begin(&sleep_list), struct thread, elem);
+	printf("%s\n", fff->name);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -142,8 +142,13 @@ timer_print_stats (void) {
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
+
+	// 타임 인터럽트 마다 슬립 리스트에서 시간이 다된 스레드들을 깨우고
+	// 그걸 레디리스트에 넣는다.
 	ticks++;
 	thread_tick ();
+	thread_wakeup(ticks);
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
