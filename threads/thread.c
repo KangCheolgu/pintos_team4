@@ -41,6 +41,8 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
+// blocked thread list 
+static struct list sleep_list;
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -63,6 +65,7 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+static bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -96,7 +99,7 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 void
 thread_init (void) {
 	ASSERT (intr_get_level () == INTR_OFF);
-
+ 
 	/* Reload the temporal gdt for the kernel
 	 * This gdt does not include the user context.
 	 * The kernel will rebuild the gdt with user context, in gdt_init (). */
@@ -206,10 +209,35 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	//thread_unblock(t);
+
 	/* Add to run queue. */
-	thread_unblock (t);
+	// 강철구 
+	// 생성되는 스레드의 우선순위가 현재 러닝중인 스레드의 우선순위보다 높다면
+	// 바로 러닝으로 바꿔준다.
+	// 난 우선순위가 높다면 push front를 써서 넣은 후 thread_yield를 사용할 것이다.
+	if(t->priority > thread_current()->priority){
+		list_push_front(&ready_list, &t->elem);
+		thread_yield();
+	} else {
+		thread_unblock (t);
+	}
 
 	return tid;
+}
+
+static bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux){
+	
+	ASSERT(a != NULL);
+	ASSERT(b != NULL);
+	struct thread *a_entry = list_entry (a, struct thread, elem);
+	struct thread *b_entry = list_entry (b, struct thread, elem);
+
+	if(a_entry->priority > b_entry->priority) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 /*  현재 스레드의 상태를 블락으로 바꾸고 
@@ -284,10 +312,11 @@ thread_unblock (struct thread *t) {
 	enum intr_level old_level;
 
 	ASSERT (is_thread (t));
-
+	
 	old_level = intr_disable ();
-	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	ASSERT (t->status = THREAD_BLOCKED);
+	// list_push_back (&ready_list, &t->elem)
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority , NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -346,6 +375,7 @@ void
 thread_yield (void) {
 	//현재 실행중인 스레드에 대한 포인터
 	struct thread *curr = thread_current ();
+
 	// printf("current thread name : %s\n",curr->name);
 	// 인터럽트 레벨을 저장할 변수
 	enum intr_level old_level;
@@ -358,9 +388,10 @@ thread_yield (void) {
 	// idle 스레드가 아니라면 현재 스레드를 준비 큐에 다시 넣는다. 
 	// 즉 실행중인 스레드를 준비큐에 넣어 다음에 스케줄리 될 수 있도록 한다.  
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
-	// 현재 스레드를 준비 큐에 넣고 스케줄링을 수행한다.
-	do_schedule (THREAD_READY);
+		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL); 
+	// 피피티에는 이렇게 나와 있으나 do_schedule 과 뭐가 다르지?
+	curr->status = THREAD_READY;
+	schedule ();
 	// 인터럽트 레벨로 복원한다.
 	intr_set_level (old_level);
 
@@ -372,6 +403,7 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	list_sort(&ready_list, cmp_priority, NULL);
 }
 
 /* Returns the current thread's priority. */

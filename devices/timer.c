@@ -74,12 +74,9 @@ timer_calibrate (void) {
 	/* Refine the next 8 bits of loops_per_tick. */
 	// 좀더 정밀하게 보정하는 작업
 	high_bit = loops_per_tick;
-	printf("high bit : %d\n", high_bit);
 	for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
-		printf("test bit : %d\n", test_bit);
 		if (!too_many_loops (high_bit | test_bit))
 			loops_per_tick |= test_bit;
-			printf("loop per tick : %d\n", loops_per_tick);
 	
 	// PRIu64 에서 PRI 는 print, u는 unsigned, 64는 비트수를 의미
 	printf ("loops_per_tick : %'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
@@ -109,10 +106,7 @@ void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 	ASSERT (intr_get_level () == INTR_ON);
-	printf("타이머 슬립 진입");
 	thread_sleep(start + ticks);
-	struct thread *fff = list_entry(list_begin(&sleep_list), struct thread, elem);
-	printf("%s\n", fff->name);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -142,13 +136,11 @@ timer_print_stats (void) {
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
-
 	// 타임 인터럽트 마다 슬립 리스트에서 시간이 다된 스레드들을 깨우고
 	// 그걸 레디리스트에 넣는다.
 	ticks++;
 	thread_tick ();
 	thread_wakeup(ticks);
-
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
