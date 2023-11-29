@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -65,10 +66,8 @@ typedef int tid_t;
  *       big.  If it does, then there will not be enough room for
  *       the kernel stack.  Our base `struct thread' is only a
  *       few bytes in size.  It probably should stay well under 1
- *       kB.
- *
- *    2. Second, kernel stacks must not be allowed to grow too
- *       large.  If a stack overflows, it will corrupt the thread
+ *       lage
+	  2. If a stack overflows, it will corrupt the thread
  *       state.  Thus, kernel functions should not allocate large
  *       structures or arrays as non-static local variables.  Use
  *       dynamic allocation with malloc() or palloc_get_page()
@@ -85,16 +84,22 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
-	char name[16];                      /* Name (for debugging purposes). */
+	char name[16];                  	/* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+	int origin_priority;				/* Never Changed Priority*/
 	int awake_ticks;					// 일어나야할 시간
+	struct lock *wait_lock;				// 기다리는 락
+	struct list donated_threads;		// 기부해준 쓰레드들
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	struct list_elem d_elem;			// 기부 쓰레드 연결 리스트용
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -127,12 +132,16 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 void thread_block (void);
 void thread_unblock (struct thread *);
 
+void thread_sleep (int);
+void thread_wakeup(int);
+
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_preemption(void);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
@@ -141,7 +150,10 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void donate_thread(void);
 
 void do_iret (struct intr_frame *tf);
+
+bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux);
 
 #endif /* threads/thread.h */

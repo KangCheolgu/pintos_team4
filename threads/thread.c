@@ -65,7 +65,7 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
-static bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux);
+bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -209,24 +209,23 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	//thread_unblock(t);
 
-	/* Add to run queue. */
-	// 강철구 
-	// 생성되는 스레드의 우선순위가 현재 러닝중인 스레드의 우선순위보다 높다면
-	// 바로 러닝으로 바꿔준다.
-	// 난 우선순위가 높다면 push front를 써서 넣은 후 thread_yield를 사용할 것이다.
-	if(t->priority > thread_current()->priority){
-		list_push_front(&ready_list, &t->elem);
-		thread_yield();
-	} else {
-		thread_unblock (t);
-	}
+	thread_unblock(t);
+	thread_preemption();
 
 	return tid;
 }
 
-static bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux){
+void
+thread_preemption(){
+	struct thread *a = thread_current();
+	struct list_elem *b_elem = list_begin(&ready_list);
+	struct thread *b = list_entry (b_elem, struct thread, elem);
+
+	if(a->priority < b->priority) thread_yield();
+}
+
+bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED){
 	
 	ASSERT(a != NULL);
 	ASSERT(b != NULL);
@@ -260,6 +259,7 @@ thread_sleep (int sleep_ticks) {
 		list_push_back (&sleep_list, &curr->elem);
 		thread_block();
 	}
+
 	intr_set_level (old_level);
 }
 /*
@@ -390,8 +390,7 @@ thread_yield (void) {
 	if (curr != idle_thread)
 		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL); 
 	// 피피티에는 이렇게 나와 있으나 do_schedule 과 뭐가 다르지?
-	curr->status = THREAD_READY;
-	schedule ();
+	do_schedule(THREAD_READY);
 	// 인터럽트 레벨로 복원한다.
 	intr_set_level (old_level);
 
@@ -402,11 +401,33 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	list_sort(&ready_list, cmp_priority, NULL);
+
+	thread_current ()->origin_priority = new_priority;
+
+	select_maximum_donation(thread_current());
+
+	thread_preemption();
 }
 
+void select_maximum_donation(struct thread *curr) {
+
+	curr->priority = curr->origin_priority;
+
+	if(!list_empty(&curr->donated_threads)) {
+
+		struct thread *tmp = list_entry(
+			list_max(&curr->donated_threads,cmp_priority_in_donate,NULL), 
+				struct thread, d_elem);
+
+		if (tmp->priority > curr->priority) curr->priority = tmp->priority;
+
+		list_sort(&ready_list, cmp_priority, NULL);
+
+   	}
+}
 /* Returns the current thread's priority. */
+// 현재 스레드의 우선순위를 반환합니다. 
+// 우선 순위 기부가 있는 경우 더 높은 (기부된) 우선순위를 반환합니다.
 int
 thread_get_priority (void) {
 	return thread_current ()->priority;
@@ -501,6 +522,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	// additonal values
+	t->origin_priority = priority;
+	list_init(&t->donated_threads);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
