@@ -357,8 +357,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-   list_push_back(&cond->waiters, &waiter.elem);
-   //list_insert_ordered (&cond->waiters, &waiter.elem, cmp_sema_priority, NULL);
+   //list_push_back(&cond->waiters, &waiter.elem);
+   list_insert_ordered (&cond->waiters, &waiter.elem, cmp_sema_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -379,7 +379,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-   //list_sort(&cond->waiters, cmp_sema_priority, NULL);
+   list_sort(&cond->waiters, cmp_sema_priority, NULL);
 
 	if (!list_empty (&cond->waiters)){
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
