@@ -31,23 +31,45 @@ static void real_time_sleep (int64_t num, int32_t denom);
 
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
-   corresponding interrupt. */
-void
-timer_init (void) {
+   corresponding interrupt. 
+   초당 PIT_FREQ 횟수를 인터럽트하도록  
+   8254 PIT(Programmable Interval Tiemr) 를 설정하고
+   해당 인터럽트를 등록합니다.
+   */
+void timer_init (void) {
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
 	   nearest. */
+	// PIT의 입력 주파수를 TIMER_REQ로 나누어서 최종적으로 설정할 타이머 카운터의 초기값을 계산
+	// 8254 PIT은 일반적으로 1193180hz의 입력 주파수를 가짐.
+	// TIMER_FREQ/2 를 더해주는 이유는 반올림을 위함
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
 
+	/*outb 내부의 outsb
+		DS:(E)SI또는 RSI에 지정된 메모리 위치에서
+		DX^2에 지정된 I/O 포트로 바이트를 출력합니다.*/
+
+	//CW : (추측) Counter word*/
+	/* 카운터 비트 표현 방식
+		//LSB : Least Significant Bit 최소 중요 비트 
+		//MSB : Most Significant Bit 최대 중요 비트
+	*/
+	// mode 2 : 카운터 동작 모드, 주기적 또는 비주기적으로 
+	// 			값을 증가 또는 감소 시키는 방식과 관련
+	// Binary : 이진법. 즉, 카운터의 값은 이진수로 표현되고 있음.
+	
 	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
 	outb (0x40, count & 0xff);
 	outb (0x40, count >> 8);
 
+	/* 디버깅 목적으로 NAME이라는 HANDLER를 호출하기 위해 
+	외부 인터럽트 VEC_NO를 등록합니다. 
+	핸들러는 인터럽트가 비활성화된 상태로 실행됩니다*/
+	// 32~255(0x20~0xff) 까지는 커널 설계자가 정의할 수 있도록 되어 있음.
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
-void
-timer_calibrate (void) {
+void timer_calibrate (void) {
 	unsigned high_bit, test_bit;
 
 	ASSERT (intr_get_level () == INTR_ON);
@@ -88,13 +110,17 @@ timer_elapsed (int64_t then) {
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
-void
-timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+void timer_sleep (int64_t ticks) {
+	//ticks : 재울 시간
+	int64_t start = timer_ticks();
 
 	ASSERT (intr_get_level () == INTR_ON);
+	/* 	for busy_waiting
 	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+		thread_yield ();	*/
+	//if(timer_elapsed(start)<ticks){
+		thread_sleep(start+ticks);
+	//}
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -110,22 +136,24 @@ timer_usleep (int64_t us) {
 }
 
 /* Suspends execution for approximately NS nanoseconds. */
-void
-timer_nsleep (int64_t ns) {
+void timer_nsleep (int64_t ns) {
 	real_time_sleep (ns, 1000 * 1000 * 1000);
 }
 
 /* Prints timer statistics. */
-void
-timer_print_stats (void) {
+void timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
 /* Timer interrupt handler. */
-static void
-timer_interrupt (struct intr_frame *args UNUSED) {
+static void timer_interrupt (struct intr_frame *args UNUSED) {
+	// 타임 인터럽트 마다 sleep_list에서 시간이 다 된 스레드들을 깨우고
+	// 그걸 ready_list에 넣는다.
 	ticks++;
 	thread_tick ();
+	/* code to add */
+	//check the sleep list and the global tick
+	thread_find_wakeup(ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -184,3 +212,11 @@ real_time_sleep (int64_t num, int32_t denom) {
 		busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
 	}
 }
+/*
+int64_t save_min_tick(int64_t cur_ticks){
+	if(ticks>cur_ticks)
+	ticks = cur_ticks;
+}
+int64_t ret_min_tick(){
+	return ticks;
+}*/

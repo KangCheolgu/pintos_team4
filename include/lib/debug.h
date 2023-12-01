@@ -4,6 +4,8 @@
 /* GCC lets us add "attributes" to functions, function
  * parameters, etc. to indicate their properties.
  * See the GCC manual for details. */
+//코드에서 변수가 사용되지 않았을때
+//컴파일러에게 경고하지 말라고 지시하는 데 사용.
 #define UNUSED __attribute__ ((unused))
 #define NO_RETURN __attribute__ ((noreturn))
 #define NO_INLINE __attribute__ ((noinline))

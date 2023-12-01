@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list sleep_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -62,6 +63,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+void thread_sleep(int64_t sleep_ticks);
+void thread_find_wakeup(int total_ticks);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -108,6 +111,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init(&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -122,8 +126,10 @@ thread_init (void) {
 void
 thread_start (void) {
 	/* Create the idle thread. */
+	// idle_started 세마포어 생성 및 초기화
 	struct semaphore idle_started;
 	sema_init (&idle_started, 0);
+	// idle 스레드 생성.
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
@@ -176,8 +182,7 @@ thread_print_stats (void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
-tid_t
-thread_create (const char *name, int priority,
+tid_t thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
@@ -204,9 +209,14 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	if(priority>= thread_current()){
+
+	}
 	/* Add to run queue. */
 	thread_unblock (t);
-
+	if(priority>thread_current()->priority){
+		
+	}
 	return tid;
 }
 
@@ -359,12 +369,15 @@ thread_get_recent_cpu (void) {
 static void
 idle (void *idle_started_ UNUSED) {
 	struct semaphore *idle_started = idle_started_;
-
+	//idle_thread 전역 변수에 자신을 등록
 	idle_thread = thread_current ();
+	//idle의 실행을 기다렸던 메인을 unblock, 즉, 메인은 ready_list에 들어감.
 	sema_up (idle_started);
 
 	for (;;) {
 		/* Let someone else run. */
+		// 일단 자신을 한번 block() 시키면서
+		//스케줄 될 수 있는 다른 스레드에게 CPU를 양보.
 		intr_disable ();
 		thread_block ();
 
@@ -588,3 +601,54 @@ allocate_tid (void) {
 
 	return tid;
 }
+
+void thread_sleep(int64_t sleep_ticks){
+	struct thread *curr =thread_current();
+	
+	/* When you manipulate thread list, disable interrupt!*/
+	// 현재 스레드의 상태를 블락으로 바꾸고 인터럽트 막음.
+	enum intr_level old_level;
+
+	ASSERT(!intr_context());
+	
+	old_level = intr_disable();
+	
+	if(curr!=idle_thread){
+		//store the local tick to wake up
+		curr->wakeup_tick = sleep_ticks;
+		list_push_back(&sleep_list, &curr->elem);
+		//Change the staste of the caller therad to BLOCKED
+		// update the global tick if necessary, and call schedule()
+		thread_block();
+	}
+	intr_set_level(old_level);
+	
+	/* prev  
+	thread_current ()->wakeup_tick = sleep_ticks;
+	thread_current ()->status = THREAD_BLOCKED;
+	//save_min_tick(ticks);
+	//schedule();*/
+	
+}
+
+void thread_find_wakeup(int total_ticks){
+	enum intr_level old_level;
+	struct list_elem *cur_ptr = list_begin(&sleep_list);
+	struct thread *waken;
+	// Disable interrupt
+	old_level = intr_disable();
+	while(cur_ptr != list_end(&sleep_list)){
+		waken = list_entry(cur_ptr, struct thread, elem);
+		if(waken->wakeup_tick <= total_ticks){
+			cur_ptr = list_remove(&waken->elem);
+			thread_unblock(waken);
+		}
+		else{
+			cur_ptr =list_next(&waken->elem);
+		}
+	}
+	intr_set_level(old_level);
+}
+
+
+

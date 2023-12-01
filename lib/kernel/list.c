@@ -418,6 +418,7 @@ list_sort (struct list *list, list_less_func *less, void *aux) {
 void
 list_insert_ordered (struct list *list, struct list_elem *elem,
 		list_less_func *less, void *aux) {
+	// aux : 보조인자 NULL, less : cmp 함수 
 	struct list_elem *e;
 
 	ASSERT (list != NULL);
@@ -425,7 +426,7 @@ list_insert_ordered (struct list *list, struct list_elem *elem,
 	ASSERT (less != NULL);
 
 	for (e = list_begin (list); e != list_end (list); e = list_next (e))
-		if (less (elem, e, aux))
+		if (less (elem, e, aux))	//true or false
 			break;
 	return list_insert (e, elem);
 }

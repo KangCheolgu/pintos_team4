@@ -207,6 +207,9 @@ intr_init (void) {
    privilege level DPL.  Names the interrupt NAME for debugging
    purposes.  The interrupt handler will be invoked with
    interrupt status set to LEVEL. */
+/* 설명자 권한 수준 DPL로 HANDLER를 호출하기 위해 인터럽트 VEC_NO를
+	등록합니다. 디버깅 목적으로 인터럽트 이름을 NAME으로 지정합니다.
+	인터럽트 핸들러는 인터럽트 상태가 LEVEL로 설정된 상태로 호출됩니다. */
 static void
 register_handler (uint8_t vec_no, int dpl, enum intr_level level,
 		intr_handler_func *handler, const char *name) {
@@ -224,10 +227,19 @@ register_handler (uint8_t vec_no, int dpl, enum intr_level level,
 /* Registers external interrupt VEC_NO to invoke HANDLER, which
    is named NAME for debugging purposes.  The handler will
    execute with interrupts disabled. */
+/*
+	디버깅 목적으로 NAME이라는 HANDLER를 호출하기 위해 
+	외부 인터럽트 VEC_NO를 등록합니다. 
+	핸들러는 인터럽트가 비활성화된 상태로 실행됩니다.
+*/
 void
 intr_register_ext (uint8_t vec_no, intr_handler_func *handler,
 		const char *name) {
 	ASSERT (vec_no >= 0x20 && vec_no <= 0x2f);
+	/*register_handler (uint8_t vec_no, int dpl, 
+		enum intr_level level, intr_handler_func *handler,
+		const char *name)
+	*/
 	register_handler (vec_no, 0, INTR_OFF, handler, name);
 }
 
