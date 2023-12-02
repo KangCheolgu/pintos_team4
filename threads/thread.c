@@ -464,13 +464,13 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	enum intr_level old_level = intr_disable ();
-	
-	thread_current ()->origin_priority = new_priority;
+	if(!thread_mlfqs){
+		thread_current ()->origin_priority = new_priority;
 
-	select_maximum_donation(thread_current());
+		select_maximum_donation(thread_current());
 
-	thread_preemption();
-	
+		thread_preemption();
+	}
 	intr_set_level (old_level);
 }
 
@@ -494,7 +494,11 @@ void select_maximum_donation(struct thread *curr) {
 // 우선 순위 기부가 있는 경우 더 높은 기부된) 우선순위를 반환합니다.
 int
 thread_get_priority (void) {
-	return thread_current ()->priority;
+	enum intr_level old_level = intr_disable ();
+	int result = thread_current ()->priority;
+	intr_set_level (old_level);
+
+	return result;
 }
 
 // 나이스 우선순위 레디스레드는 정수
@@ -522,16 +526,19 @@ thread_get_nice (void) {
 }
 
 fixedpoint calculate_ad_avg() {
+	int ready_threads;
 
-	int ready_threads = list_size(&ready_list)+1;
+	if (thread_current() != idle_thread){
+		ready_threads = list_size(&ready_list)+1;
 
-	// fixedpoint p1 = fp_divide_complex(fp_multiply_complex(load_avg, 59),60);
-	fixedpoint p1 = fp_multiply(fp_divide(59*f,60*f),load_avg);
-	// fixedpoint p2 = fp_divide_complex(convert_itof(ready_threads),60);
-	fixedpoint p2 = fp_multiply_complex(fp_divide(1*f,60*f),ready_threads);
+	} else {
+		ready_threads = list_size(&ready_list);
+	}
+
+	fixedpoint p1 = fp_divide_complex(fp_multiply_complex(load_avg, 59),60);
+	fixedpoint p2 = fp_divide_complex(convert_itof(ready_threads),60);
 
 	fixedpoint result = fp_add(p1, p2);
-
 	return result;
 }
 
@@ -555,23 +562,24 @@ thread_get_load_avg (void) {
 int
 thread_get_recent_cpu (void) {
 	fixedpoint result = fp_multiply_complex(thread_current()->recent_cpu_point,100);
-
 	return convert_ftoi_rounding(result);
 }
 
 void increase_recent_cpu_point() {
 	if(thread_current() != idle_thread){
-		thread_current()->recent_cpu_point += 1;
+		thread_current()->recent_cpu_point = fp_add_complex(thread_current()->recent_cpu_point,1);
 	}
 }
-
 
 void refresh_all_thread_recent_cpu () {
 	if(thread_current() != idle_thread){
 		struct list_elem *ptr = list_begin(&all_list);
 		while(ptr != list_end(&all_list)) {
 			struct thread *curr = list_entry(ptr, struct thread, a_elem);
-			curr->recent_cpu_point = calculate_recent_cpu(curr);
+
+			if(curr != idle_thread) {
+				curr->recent_cpu_point = calculate_recent_cpu(curr);
+			}
 			ptr = list_next(ptr);
 		}
 	}
@@ -594,7 +602,9 @@ void refresh_all_thread_priority () {
 		struct list_elem *ptr = list_begin(&all_list);
 		while(ptr != list_end(&all_list)) {
 			struct thread *curr = list_entry(ptr, struct thread, a_elem);
-			curr->priority = calculate_priority(curr);
+			if(curr != idle_thread) {
+				curr->priority = calculate_priority(curr);
+			}
 			ptr = list_next(ptr);
 		}
 	}

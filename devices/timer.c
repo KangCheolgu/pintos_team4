@@ -145,18 +145,15 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	
 	if(thread_mlfqs){
 		increase_recent_cpu_point();
-		
-		// 4틱마다 priority 계산
-		if(timer_ticks() % 4 == 0){
-			refresh_all_thread_priority();
-		}
-
 		// 100 틱마다 load_avg 계산
 		if(timer_ticks() % TIMER_FREQ == 0){
 			load_avg = calculate_ad_avg();
 			refresh_all_thread_recent_cpu ();
 		}
-		
+		// 4틱마다 priority 계산
+		if(timer_ticks() % 4 == 0){
+			refresh_all_thread_priority();
+		}
 	}
 
 	thread_wakeup(ticks);
