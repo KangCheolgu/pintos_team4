@@ -33,9 +33,7 @@ test_alarm_priority (void)
     }
 
   thread_set_priority (PRI_MIN);
-  printf("\nTest\n");
   for (i = 0; i < 10; i++){
-    printf("in sema_down for\n");
     sema_down (&wait_sema);
   }
 }
