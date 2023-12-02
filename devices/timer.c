@@ -23,6 +23,7 @@
 // 운영체제 부팅 이후 경과한 타이머 틱의 수를 나타냄
 static int64_t ticks;
 
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 // 타이머 틱당 반복 수를 나타냄. timer_calibrate() 에 의해 초기화됨
@@ -84,6 +85,7 @@ timer_calibrate (void) {
 
 /* Returns the number of timer ticks since the OS booted. */
 // 운영체제 부팅 이후 타이머 틱의 수 반환
+
 int64_t
 timer_ticks (void) {
 	enum intr_level old_level = intr_disable ();
@@ -127,7 +129,7 @@ timer_nsleep (int64_t ns) {
 	real_time_sleep (ns, 1000 * 1000 * 1000);
 }
 
-/* Prints timer statistics. */
+/* Prints timer sftatistics. */
 void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
@@ -140,6 +142,23 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	// 그걸 레디리스트에 넣는다.
 	ticks++;
 	thread_tick ();
+	
+	if(thread_mlfqs){
+		increase_recent_cpu_point();
+		
+		// 4틱마다 priority 계산
+		if(timer_ticks() % 4 == 0){
+			refresh_all_thread_priority();
+		}
+
+		// 100 틱마다 load_avg 계산
+		if(timer_ticks() % TIMER_FREQ == 0){
+			load_avg = calculate_ad_avg();
+			refresh_all_thread_recent_cpu ();
+		}
+		
+	}
+
 	thread_wakeup(ticks);
 }
 

@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "*.inc": "c"
+        "*.inc": "c",
+        "interrupt.h": "c",
+        "inttypes.h": "c",
+        "fixedpoint.h": "c"
     }
 }

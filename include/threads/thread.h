@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "synch.h"
+#include "threads/fixedpoint.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -96,9 +97,15 @@ struct thread {
 	struct lock *wait_lock;				// 기다리는 락
 	struct list donated_threads;		// 기부해준 쓰레드들
 
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 	struct list_elem d_elem;			// 기부 쓰레드 연결 리스트용
+
+	// add in advanced scheduler
+	int nice_point;						
+	fixedpoint recent_cpu_point;
+	struct list_elem a_elem;			// 전체 쓰레드 연결 리스트용
 
 
 #ifdef USERPROG
@@ -114,6 +121,15 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
+
+struct priority_list {
+	struct list *priority;
+	struct list_elem *p_elem;
+};
+
+fixedpoint load_avg;
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -155,5 +171,12 @@ void donate_thread(void);
 void do_iret (struct intr_frame *tf);
 
 bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux);
+
+// 강철구 : 어드밴스트 스케쥴러
+int calculate_priority(struct thread *curr);
+void refresh_all_thread_priority (void);
+fixedpoint calculate_ad_avg(void);
+
+
 
 #endif /* threads/thread.h */

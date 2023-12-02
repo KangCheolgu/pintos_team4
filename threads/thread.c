@@ -10,7 +10,10 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+// #include "threads/fixedpoint.h"
+
 #include "intrinsic.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -28,6 +31,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -67,6 +71,56 @@ static void schedule (void);
 static tid_t allocate_tid (void);
 bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux);
 
+
+#define f 16384
+
+typedef int32_t fixedpoint;
+
+fixedpoint convert_itof(int n){
+    return n * f;
+}
+//음수 부분 버림
+fixedpoint convert_ftoi(fixedpoint x){
+    return x / f;
+}
+// 반올림?
+fixedpoint convert_ftoi_rounding(fixedpoint x){
+    if (x >= 0) return (x + (f/2))/f;
+    else return (x - (f/2))/f;
+}
+
+fixedpoint fp_add(fixedpoint x, fixedpoint y){
+    return x + y;
+}
+
+fixedpoint fp_subtract(fixedpoint x, fixedpoint y){
+    return x - y;
+}
+
+fixedpoint fp_add_complex(fixedpoint x,int n){
+    return x + n * f;
+}
+
+fixedpoint fp_subtract_complex(fixedpoint x, int n){
+    return x - n * f;
+}
+
+fixedpoint fp_multiply(fixedpoint x,fixedpoint y){
+    return ((int64_t) x) * y / f;
+}
+
+fixedpoint fp_multiply_complex(fixedpoint x, int n){
+    return x * n;
+}
+
+fixedpoint fp_divide(fixedpoint x, fixedpoint y){
+    return ((int64_t) x) * f / y;
+}
+
+fixedpoint fp_divide_complex(fixedpoint x,int n){
+    return x / n;
+}
+
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -76,7 +130,6 @@ bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *au
  * always at the beginning of a page and the stack pointer is
  * somewhere in the middle, this locates the curent thread. */
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
-
 
 // Global descriptor table for the thread_start.
 // Because the gdt will be setup after the thread_init, we should
@@ -114,6 +167,11 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 	list_init (&sleep_list);
+
+	if(thread_mlfqs){
+		list_init (&all_list);
+		load_avg = 0;
+	}
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -209,9 +267,10 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-
 	thread_unblock(t);
 	thread_preemption();
+	// 전체 스레드에 삽입
+	if(thread_mlfqs) list_push_back(&all_list, &t->a_elem);
 
 	return tid;
 }
@@ -277,11 +336,14 @@ void thread_wakeup(int total_ticks) {
 		waken = list_entry (ptr, struct thread, elem);
 		if (waken->awake_ticks <= total_ticks) {
 			ptr = list_remove(&waken->elem);
-			thread_unblock(waken);	
+			thread_unblock(waken);
 		} else {
 			ptr = list_next(&waken->elem);	
 		}
 	}
+
+	// if(thread_mlfqs) thread_preemption();
+
 	intr_set_level (old_level);	
 }
 
@@ -401,12 +463,15 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-
+	enum intr_level old_level = intr_disable ();
+	
 	thread_current ()->origin_priority = new_priority;
 
 	select_maximum_donation(thread_current());
 
 	thread_preemption();
+	
+	intr_set_level (old_level);
 }
 
 void select_maximum_donation(struct thread *curr) {
@@ -422,42 +487,130 @@ void select_maximum_donation(struct thread *curr) {
 		if (tmp->priority > curr->priority) curr->priority = tmp->priority;
 
 		list_sort(&ready_list, cmp_priority, NULL);
-
    	}
 }
 /* Returns the current thread's priority. */
 // 현재 스레드의 우선순위를 반환합니다. 
-// 우선 순위 기부가 있는 경우 더 높은 (기부된) 우선순위를 반환합니다.
+// 우선 순위 기부가 있는 경우 더 높은 기부된) 우선순위를 반환합니다.
 int
 thread_get_priority (void) {
 	return thread_current ()->priority;
 }
 
+// 나이스 우선순위 레디스레드는 정수
+// 로드에버리지랑 리센트 시피유는 실수(고정소수점)
 /* Sets the current thread's nice value to NICE. */
+
+// - 현재 스레드의  nice 값을 새로운 nice 값으로 설정합니다.
+// - 스레드의 우선 순위를 새 값에 기반하여 다시 계산합니다.
+// - 실행 중인 스레드가 더 이상 가장 높은 우선 순위를 가지고 있지 않다면, 스레드는 양보합니다.
 void
 thread_set_nice (int nice UNUSED) {
-	/* TODO: Your implementation goes here */
+	enum intr_level old_level = intr_disable ();
+
+	thread_current()->nice_point = nice;
+	thread_current()->priority = calculate_priority(thread_current());
+	thread_preemption();
+
+	intr_set_level (old_level);
 }
 
-/* Returns the current thread's nice value. */
+/* 현재 스레드의 나이스 값 반환 */
 int
 thread_get_nice (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
+	return thread_current()->nice_point;
 }
 
+fixedpoint calculate_ad_avg() {
+
+	int ready_threads = list_size(&ready_list)+1;
+
+	// fixedpoint p1 = fp_divide_complex(fp_multiply_complex(load_avg, 59),60);
+	fixedpoint p1 = fp_multiply(fp_divide(59*f,60*f),load_avg);
+	// fixedpoint p2 = fp_divide_complex(convert_itof(ready_threads),60);
+	fixedpoint p2 = fp_multiply_complex(fp_divide(1*f,60*f),ready_threads);
+
+	fixedpoint result = fp_add(p1, p2);
+
+	return result;
+}
+
+// 현재 시스템 로드 평균을 100배 한뒤 가장 가까운 정수로 반올림 하여 반환합니다.
 /* Returns 100 times the system load average. */
 int
-thread_get_load_avg (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
+thread_get_load_avg (void) {	
+	fixedpoint result = fp_multiply_complex(load_avg,100);
+	return convert_ftoi_rounding(result);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
+// 각 프로세스가 '최근에' 얼마나 많은 CPU 시간을 받았는지 측정하려고 합니다. 
+// 더불어, 더 최근에 받은 CPU 시간이 덜 최근에 받은 CPU 시간보다 더 무거운 가중치를 가지도록 하고자 합니다. 
+// 일반적인 형태를 가진 지수 가중 이동 평균을 사용하여 이를 수행합니다.
+// recent_cpu = (2*load_avg/(2*load_avg+1))*recent_cpu + nice
+// load_avg 는 실행 준비 중인 스레드 수의 지수 가중 평균입니다.
+// load_avg 가 1 이면, 평균적으로 CPU를 경쟁하는 스레드가 하나인 경우이므로 현재의 recent cpu 값은 log2/3(0.1) 또는 6 초에 대한 가중치로 감소합니다.
+// load_avg가 2이면 가중치 0.1 에 대한 감소가 log3/4(0.1) 또는 약 8초에 대한 것입니다. 이렇게 함으로써 recent cpu는 스레드가 최근에 받은 cpu시간의 양을 추정하며,
+// 감쇠 속도는 cpu 를 경쟁하는 스레드의 수에 반비례하게 됩니다.
 int
 thread_get_recent_cpu (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
+	fixedpoint result = fp_multiply_complex(thread_current()->recent_cpu_point,100);
+
+	return convert_ftoi_rounding(result);
+}
+
+void increase_recent_cpu_point() {
+	if(thread_current() != idle_thread){
+		thread_current()->recent_cpu_point += 1;
+	}
+}
+
+
+void refresh_all_thread_recent_cpu () {
+	if(thread_current() != idle_thread){
+		struct list_elem *ptr = list_begin(&all_list);
+		while(ptr != list_end(&all_list)) {
+			struct thread *curr = list_entry(ptr, struct thread, a_elem);
+			curr->recent_cpu_point = calculate_recent_cpu(curr);
+			ptr = list_next(ptr);
+		}
+	}
+}
+
+fixedpoint calculate_recent_cpu(struct thread *curr) {
+	fixedpoint f_recent_cpu = curr->recent_cpu_point;
+
+	fixedpoint double_load_avg = fp_multiply_complex(load_avg,2);
+
+	fixedpoint decay = fp_divide(double_load_avg,fp_add_complex(double_load_avg,1));
+
+	fixedpoint result = fp_add_complex(fp_multiply(decay,f_recent_cpu),curr->nice_point);
+
+	return result;
+}
+
+void refresh_all_thread_priority () {
+	if(thread_current() != idle_thread){
+		struct list_elem *ptr = list_begin(&all_list);
+		while(ptr != list_end(&all_list)) {
+			struct thread *curr = list_entry(ptr, struct thread, a_elem);
+			curr->priority = calculate_priority(curr);
+			ptr = list_next(ptr);
+		}
+	}
+}
+
+// priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+int calculate_priority(struct thread *curr){
+
+	fixedpoint f_PRI_MAX = convert_itof(PRI_MAX);
+	fixedpoint f_recent_cpu = curr->recent_cpu_point;
+	fixedpoint f_nice = convert_itof(curr->nice_point);
+
+	fixedpoint f_result = f_PRI_MAX - fp_divide_complex(f_recent_cpu,4)
+								 - fp_multiply_complex(f_nice,2);
+
+	return convert_ftoi_rounding(f_result);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -526,6 +679,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// additonal values
 	t->origin_priority = priority;
 	list_init(&t->donated_threads);
+
+	// advanced scheduler
+	t->nice_point = 0;
+	t->recent_cpu_point = 0;
+
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -684,6 +842,7 @@ schedule (void) {
 		   schedule(). */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
+			if(thread_mlfqs) list_remove(&curr->a_elem); // 강철구 : 끝나면 올리스트에서 삭제
 			list_push_back (&destruction_req, &curr->elem);
 		}
 
