@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <threads/fixed_point.h>
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -98,7 +99,7 @@ struct thread {
 
 	/* MLFQ */
 	int nice;
-	int recent_cpu;
+	int32_t recent_cpu;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -149,7 +150,14 @@ int thread_get_load_avg (void);
 void do_iret (struct intr_frame *tf);
 void test_max_priority(void);
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void mlfqs_priority(struct thread *t);
+void mlfqs_recent_cpu(struct thread *t);
+void mlfqs_recent_cpu_all(struct thread *cur_t);
+void mlfqs_load_avg(void);
+void mlfqs_increment(void);
+void thread_preemption(void);
+void thread_sleep(int64_t sleep_ticks);
+void thread_find_wakeup(int total_ticks);
 
-
-void thread_preemption();
+fixedpoint load_avg;
 #endif /* threads/thread.h */

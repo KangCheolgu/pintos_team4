@@ -1,0 +1,16 @@
+Kernel command line: -q -mlfqs run mlfqs-load-1
+0 ~ 9fc00 1
+100000 ~ 13e0000 1
+Pintos booting with: 
+	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
+	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
+Kernel PANIC at ../../lib/kernel/list.c:78 in list_next(): assertion `is_head (elem) || is_interior (elem)' failed.
+Call stack: 0x8004213db0 0x800421402c 0x80042147d0 0x8004208160 0x800420db63 0x800420918c 0x80042095aa 0x8004207554.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 100 ticks
+Thread: 100 idle ticks, 0 kernel ticks, 0 user ticks
+Console: 651 characters output
+Keyboard: 0 keys pressed
+Powering off...

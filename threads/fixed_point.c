@@ -3,7 +3,7 @@
 
 #define f 16384
 typedef int32_t fixedpoint;
-fixedpoint conver_itof(int n){
+fixedpoint convert_itof(int n){
     return n * f;
 }
 //음수 부분 버림
@@ -45,5 +45,5 @@ fixedpoint fp_divide(fixedpoint x, fixedpoint y){
 }
 
 fixedpoint fp_divide_complex(int n, fixedpoint x){
-    return x / n;
+    return n / x;
 }

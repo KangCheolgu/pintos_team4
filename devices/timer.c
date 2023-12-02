@@ -151,7 +151,13 @@ static void timer_interrupt (struct intr_frame *args UNUSED) {
 	// 그걸 ready_list에 넣는다.
 	ticks++;
 	thread_tick ();
-	/* code to add */
+	if(thread_mlfqs){
+		mlfqs_increment();
+		if(timer_ticks()%TIMER_FREQ==0){
+			mlfqs_recent_cpu_all(thread_current());
+			mlfqs_load_avg();
+		}
+	}
 	//check the sleep list and the global tick
 	thread_find_wakeup(ticks);
 }

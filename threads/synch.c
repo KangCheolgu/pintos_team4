@@ -192,6 +192,9 @@ lock_acquire (struct lock *lock) {
 
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
+	// if(!thread_mlfqs){
+	// 	/* mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화*/
+	// }
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -226,6 +229,10 @@ lock_release (struct lock *lock) {
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
+	// if(!thread_mlfqs){
+	// 	/* mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화*/
+	// }
+	
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -307,10 +314,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 
 	if (!list_empty (&cond->waiters)){
 		list_sort(&cond->waiters, cmp_sem_priority, NULL);
-		msg("Complete list_sort");
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
-		msg("Complete sema_up");
 	}
 }
 
@@ -332,9 +337,9 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 bool cmp_sem_priority(
 const struct list_elem *a, const struct list_elem *b,
  void *aux UNUSED){
-	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
-	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
-	if(list_entry(a, struct thread, elem)->priority>list_entry(b, struct thread, elem)){
+	//struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	//struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
+	if(list_entry(a, struct thread, elem)->priority>list_entry(b, struct thread, elem)->priority){
 		return true;
 	}
 	else{

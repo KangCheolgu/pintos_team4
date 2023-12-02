@@ -1,5 +1,6 @@
 /* This file is derived from source code used in MIT's 6.828
-   course.  The original copyright notice is reproduced in full
+   course.  The original copyright notic
+   e is reproduced in full
    below. */
 
 /*
