@@ -294,7 +294,7 @@ tid_t thread_create (const char *name, int priority,
 	//	thread_yield();
 	//	//ready_list tail에 현재 쓰레드 추가.
 	//	//thread_unblock(thread_current());		
-	if(thread_mlfqs) list_push_back(&all_list, &t->elem);
+	if(thread_mlfqs) list_push_back(&all_list, &t->a_elem);
 	return tid;
 }
 
@@ -408,13 +408,18 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	if(!thread_mlfqs){
-		/* mlfqs 스케줄러를 활성하면 thread_mlfqs 변수는 true로 설정됨. 
-			Advanced scheduler에서는 우선순위를 임의로 변경할 수 없다.*/
-		thread_current ()->priority = new_priority;
-		//list_insert_ordered(&ready_list, &(thread_current()->elem), cmp_priority, NULL);
-		thread_preemption();
-	}
+	enum intr_level old_level = intr_disable();
+	
+	thread_current ()->priority = new_priority;
+	thread_preemption();
+	// if(!thread_mlfqs){
+	// 	/* mlfqs 스케줄러를 활성하면 thread_mlfqs 변수는 true로 설정됨. 
+	// 		Advanced scheduler에서는 우선순위를 임의로 변경할 수 없다.*/
+	// 	thread_current ()->priority = new_priority;
+	// 	//list_insert_ordered(&ready_list, &(thread_current()->elem), cmp_priority, NULL);
+	// 	thread_preemption();
+	// }
+	intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -431,7 +436,8 @@ thread_set_nice (int nice UNUSED) {
 
 	thread_current()->nice = nice;
 	mlfqs_priority(thread_current());
-	do_schedule(THREAD_READY);
+	//do_schedule(THREAD_READY);
+	thread_preemption();
 
 	intr_set_level(old_level);
 
@@ -440,10 +446,10 @@ thread_set_nice (int nice UNUSED) {
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
-	enum intr_level old_level;
-	old_level = intr_disable();
+	//enum intr_level old_level;
+	//old_level = intr_disable();
 	int nice_val = thread_current()->nice;
-	intr_set_level(old_level);
+	//intr_set_level(old_level);
 	return nice_val;
 }
 
@@ -702,6 +708,7 @@ schedule (void) {
 		   schedule(). */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
+			if(thread_mlfqs) list_remove(&curr->a_elem);
 			list_push_back (&destruction_req, &curr->elem);
 		}
 
@@ -823,9 +830,9 @@ void mlfqs_recent_cpu_all(struct thread *cur_t){
 		mlfqs_recent_cpu(cur_t);
 		struct list_elem *e = list_begin(&all_list);
 		while(e!=list_end(&all_list)){
-			struct thread *curr = list_entry(e, struct thread, elem);
+			struct thread *curr = list_entry(e, struct thread, a_elem);
 			mlfqs_recent_cpu(curr);
-			curr = list_next(curr);
+			e = list_next(e);
 		}
 		/*
 		for(e= list_begin(&sleep_list); e!=list_end(&sleep_list); e=list_next(e)){
@@ -839,6 +846,12 @@ void mlfqs_recent_cpu_all(struct thread *cur_t){
 
 // load_avg 값 계산
 void mlfqs_load_avg(void){
+	int ready_threads = list_size(&ready_list)+1;
+	fixedpoint p1 = fp_multiply(fp_divide(59*f, 60*f), load_avg);
+	fixedpoint p2  = fp_multiply_complex(fp_divide(1*f, 60*f), ready_threads);
+	fixedpoint result = fp_add(p1, p2);
+	load_avg = result;
+		/*
 	fixedpoint f1 = fp_multiply(load_avg, fp_divide(convert_itof(59),convert_itof(60)));
 	fixedpoint f2;
 	if(thread_current()==idle_thread){
@@ -847,7 +860,7 @@ void mlfqs_load_avg(void){
 	else{
 		f2 = fp_multiply_complex(list_size(&ready_list)+1 , fp_divide(convert_itof(1),convert_itof(60)));
 	}
-	load_avg = fp_add(f1,f2);
+	load_avg = fp_add(f1,f2);*/
 	ASSERT(load_avg>=0);
 }
 
@@ -863,3 +876,14 @@ void mlfqs_increment(void){
 void mlfqs_recalc(void){
 	
 }*/
+
+void mlfqs_all_priority(void){
+	if(thread_current() != idle_thread){
+		struct list_elem *cur_elem = list_begin(&all_list);
+		while(cur_elem!=list_end(&all_list)){
+			struct thread *curr = list_entry(cur_elem, struct thread, a_elem);
+			mlfqs_priority(curr);
+			cur_elem = list_next(cur_elem); 
+		}
+	}
+}

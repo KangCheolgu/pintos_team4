@@ -153,9 +153,13 @@ static void timer_interrupt (struct intr_frame *args UNUSED) {
 	thread_tick ();
 	if(thread_mlfqs){
 		mlfqs_increment();
+		
+		if(timer_ticks()%4 == 0){
+			mlfqs_all_priority();
+		}
 		if(timer_ticks()%TIMER_FREQ==0){
-			mlfqs_recent_cpu_all(thread_current());
 			mlfqs_load_avg();
+			mlfqs_recent_cpu_all(thread_current());
 		}
 	}
 	//check the sleep list and the global tick

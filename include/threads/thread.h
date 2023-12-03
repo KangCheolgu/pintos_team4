@@ -99,7 +99,8 @@ struct thread {
 
 	/* MLFQ */
 	int nice;
-	int32_t recent_cpu;
+	fixedpoint recent_cpu;
+	struct list_elem a_elem;			// 전체 스레드 연결리스트용
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

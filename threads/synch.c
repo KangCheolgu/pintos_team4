@@ -337,8 +337,8 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 bool cmp_sem_priority(
 const struct list_elem *a, const struct list_elem *b,
  void *aux UNUSED){
-	//struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
-	//struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
+	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
 	if(list_entry(a, struct thread, elem)->priority>list_entry(b, struct thread, elem)->priority){
 		return true;
 	}
