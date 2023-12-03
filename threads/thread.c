@@ -31,7 +31,6 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -169,7 +168,6 @@ thread_init (void) {
 	list_init (&sleep_list);
 
 	if(thread_mlfqs){
-		list_init (&all_list);
 		load_avg = 0;
 	}
 
@@ -270,7 +268,6 @@ thread_create (const char *name, int priority,
 	thread_unblock(t);
 	thread_preemption();
 	// 전체 스레드에 삽입
-	if(thread_mlfqs) list_push_back(&all_list, &t->a_elem);
 
 	return tid;
 }
@@ -281,22 +278,18 @@ thread_preemption(){
 	struct list_elem *b_elem = list_begin(&ready_list);
 	struct thread *b = list_entry (b_elem, struct thread, elem);
 
+	if(thread_mlfqs){
+		if(thread_ticks % 4 == 0){
+			if(a->priority <= b->priority) thread_yield();
+		} else {
+			if(a->priority < b->priority) thread_yield();
+		}
+	}
+
 	if(a->priority < b->priority) thread_yield();
 }
 
-bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED){
-	
-	ASSERT(a != NULL);
-	ASSERT(b != NULL);
-	struct thread *a_entry = list_entry (a, struct thread, elem);
-	struct thread *b_entry = list_entry (b, struct thread, elem);
 
-	if(a_entry->priority > b_entry->priority) {
-		return true;
-	} else {
-		return false;
-	}
-}
 
 /*  현재 스레드의 상태를 블락으로 바꾸고 
 	슬립 리스트에 넣고
@@ -341,9 +334,6 @@ void thread_wakeup(int total_ticks) {
 			ptr = list_next(&waken->elem);	
 		}
 	}
-
-	// if(thread_mlfqs) thread_preemption();
-
 	intr_set_level (old_level);	
 }
 
@@ -451,7 +441,6 @@ thread_yield (void) {
 	// 즉 실행중인 스레드를 준비큐에 넣어 다음에 스케줄리 될 수 있도록 한다.  
 	if (curr != idle_thread)
 		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL); 
-	// 피피티에는 이렇게 나와 있으나 do_schedule 과 뭐가 다르지?
 	do_schedule(THREAD_READY);
 	// 인터럽트 레벨로 복원한다.
 	intr_set_level (old_level);
@@ -561,27 +550,48 @@ thread_get_load_avg (void) {
 // 감쇠 속도는 cpu 를 경쟁하는 스레드의 수에 반비례하게 됩니다.
 int
 thread_get_recent_cpu (void) {
+
+	enum intr_level old_level = intr_disable ();
+
 	fixedpoint result = fp_multiply_complex(thread_current()->recent_cpu_point,100);
+	
+	intr_set_level (old_level);
+
 	return convert_ftoi_rounding(result);
 }
 
 void increase_recent_cpu_point() {
+
+	enum intr_level old_level = intr_disable ();
+
 	if(thread_current() != idle_thread){
 		thread_current()->recent_cpu_point = fp_add_complex(thread_current()->recent_cpu_point,1);
 	}
+
+	intr_set_level (old_level);
 }
 
 void refresh_all_thread_recent_cpu () {
-	if(thread_current() != idle_thread){
-		struct list_elem *ptr = list_begin(&all_list);
-		while(ptr != list_end(&all_list)) {
-			struct thread *curr = list_entry(ptr, struct thread, a_elem);
+	struct list_elem *ptr = list_begin(&ready_list);
 
-			if(curr != idle_thread) {
-				curr->recent_cpu_point = calculate_recent_cpu(curr);
-			}
-			ptr = list_next(ptr);
+	thread_current()->recent_cpu_point = calculate_recent_cpu(thread_current());
+
+	while(ptr != list_end(&ready_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, elem);
+		if(curr != idle_thread) {
+			curr->recent_cpu_point = calculate_recent_cpu(curr);
 		}
+		ptr = list_next(ptr);
+	}
+
+	ptr = list_begin(&sleep_list);
+
+	while(ptr != list_end(&sleep_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, elem);
+		if(curr != idle_thread) {
+			curr->recent_cpu_point = calculate_recent_cpu(curr);
+		}
+		ptr = list_next(ptr);
 	}
 }
 
@@ -598,15 +608,26 @@ fixedpoint calculate_recent_cpu(struct thread *curr) {
 }
 
 void refresh_all_thread_priority () {
-	if(thread_current() != idle_thread){
-		struct list_elem *ptr = list_begin(&all_list);
-		while(ptr != list_end(&all_list)) {
-			struct thread *curr = list_entry(ptr, struct thread, a_elem);
-			if(curr != idle_thread) {
-				curr->priority = calculate_priority(curr);
-			}
-			ptr = list_next(ptr);
+	struct list_elem *ptr = list_begin(&ready_list);
+
+	thread_current()->priority = calculate_priority(thread_current());
+
+	while(ptr != list_end(&ready_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, elem);
+		if(curr != idle_thread) {
+			curr->priority = calculate_priority(curr);
 		}
+		ptr = list_next(ptr);
+	}
+	
+	ptr = list_begin(&sleep_list);
+
+	while(ptr != list_end(&sleep_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, elem);
+		if(curr != idle_thread) {
+			curr->priority = calculate_priority(curr);
+		}
+		ptr = list_next(ptr);
 	}
 }
 
@@ -852,7 +873,6 @@ schedule (void) {
 		   schedule(). */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
-			if(thread_mlfqs) list_remove(&curr->a_elem); // 강철구 : 끝나면 올리스트에서 삭제
 			list_push_back (&destruction_req, &curr->elem);
 		}
 
@@ -874,3 +894,31 @@ allocate_tid (void) {
 
 	return tid;
 }
+
+bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED){
+	
+	ASSERT(a != NULL);
+	ASSERT(b != NULL);
+	struct thread *a_entry = list_entry (a, struct thread, elem);
+	struct thread *b_entry = list_entry (b, struct thread, elem);
+
+	if(a_entry->priority > b_entry->priority) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+// bool cmp_awake_ticks (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED){
+	
+// 	ASSERT(a != NULL);
+// 	ASSERT(b != NULL);
+// 	struct thread *a_entry = list_entry (a, struct thread, elem);
+// 	struct thread *b_entry = list_entry (b, struct thread, elem);
+
+// 	if(a_entry->awake_ticks > b_entry->awake_ticks) {
+// 		return true;
+// 	} else {
+// 		return false;
+// 	}
+// }

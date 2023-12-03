@@ -297,10 +297,8 @@ lock_release (struct lock *lock) {
             list_remove(&tmp->d_elem);
          }
       }
+      select_maximum_donation(curr);
    }
-   
-   select_maximum_donation(curr);
-
    // printf("\n %s %d \n", lock->holder->name, curr->priority );
    lock->holder = NULL;
 	sema_up (&lock->semaphore);

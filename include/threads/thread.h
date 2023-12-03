@@ -105,7 +105,6 @@ struct thread {
 	// add in advanced scheduler
 	int nice_point;						
 	fixedpoint recent_cpu_point;
-	struct list_elem a_elem;			// 전체 쓰레드 연결 리스트용
 
 
 #ifdef USERPROG
