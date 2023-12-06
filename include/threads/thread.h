@@ -107,10 +107,10 @@ struct thread {
 	fixedpoint recent_cpu_point;
 
 
-#ifdef USERPROG
+// #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-#endif
+// #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;

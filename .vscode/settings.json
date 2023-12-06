@@ -3,6 +3,7 @@
         "*.inc": "c",
         "interrupt.h": "c",
         "inttypes.h": "c",
-        "fixedpoint.h": "c"
+        "fixedpoint.h": "c",
+        "tests.h": "c"
     }
 }

@@ -42,14 +42,12 @@ tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
-
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
-
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -63,7 +61,6 @@ initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-
 	process_init ();
 
 	if (process_exec (f_name) < 0)
@@ -179,6 +176,11 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+	uintptr_t PHYS_BASE = _if.rsp;
+	
+	hex_dump(_if.rsp , _if.rsp , USER_STACK - _if.rsp , true);
+
+
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -204,6 +206,10 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	int cnt = 999999999*2;
+	while(cnt--){
+
+	}
 	return -1;
 }
 
@@ -329,6 +335,13 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	char *ret_ptr;
+    char *next_ptr;
+
+	ret_ptr = strtok_r(file_name, " ", &next_ptr);
+
+	char *only_file_name = ret_ptr;
+
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -336,9 +349,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (only_file_name);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", only_file_name);
 		goto done;
 	}
 
@@ -398,8 +411,9 @@ load (const char *file_name, struct intr_frame *if_) {
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
 					if (!load_segment (file, file_page, (void *) mem_page,
-								read_bytes, zero_bytes, writable))
+								read_bytes, zero_bytes, writable)){
 						goto done;
+					}
 				}
 				else
 					goto done;
@@ -408,14 +422,66 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
-	if (!setup_stack (if_))
+	if (!setup_stack (if_)){
 		goto done;
+	}
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	////////////////////////////* 인자 스택 푸쉬 시작 */////////////////////////////////
+	
+	int cnt = 0;
+	int total_length = 0;
+	char *arr[64];
+	int *addr_arr[64];
+
+	// 인자들을 배열에 저장
+	for(i = 0; i < 64; i++) {
+		if (ret_ptr == NULL) break;
+
+		arr[i] = ret_ptr;
+		total_length += strlen(ret_ptr)+1;
+		
+        ret_ptr = strtok_r(NULL, " ", &next_ptr);	
+		cnt++;
+	}
+
+	// 배열에 저장한 인자들을 역 순으로 스택에 넣음
+	for (int x = cnt-1; x >= 0; x--) {
+
+		size_t word_length = strlen(arr[x]);
+		if_->rsp -= word_length + 1;
+		
+		memcpy(if_->rsp, arr[x], word_length + 1);
+
+		// 넣은 주소도 저장
+		addr_arr[x] = if_->rsp;
+	}
+
+	// 8의 배수로 패딩
+	int eightn = 8*((total_length/8)+1);
+
+	if_->rsp -= eightn-total_length;
+	
+
+	// 빈 주소값 넣기
+	if_->rsp -= 8;
+	
+	// argv 주소값 넣기
+	for (int x = cnt-1; x >= 0; x--) {
+		if_->rsp -= 8;
+		memcpy(if_->rsp, &addr_arr[x] , 8);
+	}
+
+	// fake addr 넣기
+	if_->rsp -= 8;
+
+	// Point %rsi to argv (the address of argv[0]) and set %rdi to argc
+	if_->R.rsi = USER_STACK - (eightn + (cnt+1)*8);
+	if_->R.rdi = cnt;
+
+	////////////////////////////* 인자 스택 푸쉬 끝 */////////////////////////////////
 
 	success = true;
 
@@ -569,6 +635,32 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
+
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int
+get_user (const uint8_t *uaddr)
+{
+    int result;
+    asm ("movl $1f, %0; movzbl %1, %0; 1:"
+        : "=&a" (result) : "m" (*uaddr));
+    return result;
+}
+
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE. 
+   Returns true if successful, false if a segfault occurred.*/
+static bool
+put_user (uint8_t *udst, uint8_t byte)
+{
+    int error_code;
+    asm ("movl $1f, %0; movb %b2, %1; 1:"
+        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+    return error_code != -1;
+}
+
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the

@@ -41,6 +41,19 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+	
+
+
+
 	printf ("system call!\n");
 	thread_exit ();
 }
+
+
+void exit (int status)
+{
+    struct thread *cur = thread_current (); 
+    /* Save exit status at process descriptor */
+    printf("%s: exit(%d)\n" , cur -> name , status);
+    thread_exit();
+}    

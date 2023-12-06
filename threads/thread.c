@@ -70,8 +70,8 @@ static void schedule (void);
 static tid_t allocate_tid (void);
 bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *aux);
 
-
 #define f 16384
+
 
 typedef int32_t fixedpoint;
 
@@ -242,6 +242,7 @@ thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
+	printf("in thread create \n");
 
 	ASSERT (function != NULL);
 
@@ -274,19 +275,21 @@ thread_create (const char *name, int priority,
 
 void
 thread_preemption(){
-	struct thread *a = thread_current();
-	struct list_elem *b_elem = list_begin(&ready_list);
-	struct thread *b = list_entry (b_elem, struct thread, elem);
+	if(!list_empty(&ready_list) && !intr_context()){
+		struct thread *a = thread_current();
+		struct list_elem *b_elem = list_begin(&ready_list);
+		struct thread *b = list_entry (b_elem, struct thread, elem);
 
-	if(thread_mlfqs){
-		if(thread_ticks % 4 == 0){
-			if(a->priority <= b->priority) thread_yield();
-		} else {
-			if(a->priority < b->priority) thread_yield();
-		}
+		// if(thread_mlfqs){
+		// 	if(thread_ticks % 4 == 0){
+		// 		if(a->priority <= b->priority) thread_yield();
+		// 	} else {
+		// 		if(a->priority < b->priority) thread_yield();
+		// 	}
+		// }
+		
+		if(a->priority < b->priority) thread_yield();
 	}
-
-	if(a->priority < b->priority) thread_yield();
 }
 
 
@@ -425,34 +428,23 @@ thread_exit (void) {
 // 현재 실행 중인 스레드를 CPU에서 양보하고 현재 스레드를 스케줄러에 다시 예약할수 있도록 한다.
 void
 thread_yield (void) {
-	//현재 실행중인 스레드에 대한 포인터
 	struct thread *curr = thread_current ();
-
-	// printf("current thread name : %s\n",curr->name);
-	// 인터럽트 레벨을 저장할 변수
 	enum intr_level old_level;
-	// 이게 지금 인터럽트 컨텍스트에서 실행되었나? 
-	// 인터럽트 컨텍스트에서는 스레드를 양보하거나 대기시키는것은 안전하지 않다
-	// 외부 인터럽트 처리중이면 true를 반환한다. 즉 외부 인터럽트 처리중이면 통과할수 없다.
 	ASSERT (!intr_context ());
-	// 현재 인터럽트를 비활성화 하고 그 이전의 인터럽트 레벨을 저장
+
 	old_level = intr_disable ();
-	// idle 스레드가 아니라면 현재 스레드를 준비 큐에 다시 넣는다. 
-	// 즉 실행중인 스레드를 준비큐에 넣어 다음에 스케줄리 될 수 있도록 한다.  
+
 	if (curr != idle_thread)
 		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL); 
 	do_schedule(THREAD_READY);
-	// 인터럽트 레벨로 복원한다.
+
 	intr_set_level (old_level);
 
-// 현재 실행 중인 스레드를 양보하고 만약 idle스레드가 아니라면 해당 스레드를 준비큐에 넣어
-// 다른스레드가 CPU를 사용할수 있도록 한다.
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	enum intr_level old_level = intr_disable ();
 	if(!thread_mlfqs){
 		thread_current ()->origin_priority = new_priority;
 
@@ -460,7 +452,6 @@ thread_set_priority (int new_priority) {
 
 		thread_preemption();
 	}
-	intr_set_level (old_level);
 }
 
 void select_maximum_donation(struct thread *curr) {
@@ -483,10 +474,7 @@ void select_maximum_donation(struct thread *curr) {
 // 우선 순위 기부가 있는 경우 더 높은 기부된) 우선순위를 반환합니다.
 int
 thread_get_priority (void) {
-	enum intr_level old_level = intr_disable ();
 	int result = thread_current ()->priority;
-	intr_set_level (old_level);
-
 	return result;
 }
 
@@ -499,13 +487,9 @@ thread_get_priority (void) {
 // - 실행 중인 스레드가 더 이상 가장 높은 우선 순위를 가지고 있지 않다면, 스레드는 양보합니다.
 void
 thread_set_nice (int nice UNUSED) {
-	enum intr_level old_level = intr_disable ();
-
 	thread_current()->nice_point = nice;
 	thread_current()->priority = calculate_priority(thread_current());
 	thread_preemption();
-
-	intr_set_level (old_level);
 }
 
 /* 현재 스레드의 나이스 값 반환 */
@@ -550,25 +534,16 @@ thread_get_load_avg (void) {
 // 감쇠 속도는 cpu 를 경쟁하는 스레드의 수에 반비례하게 됩니다.
 int
 thread_get_recent_cpu (void) {
-
-	enum intr_level old_level = intr_disable ();
-
 	fixedpoint result = fp_multiply_complex(thread_current()->recent_cpu_point,100);
-	
-	intr_set_level (old_level);
 
 	return convert_ftoi_rounding(result);
 }
 
 void increase_recent_cpu_point() {
 
-	enum intr_level old_level = intr_disable ();
-
 	if(thread_current() != idle_thread){
 		thread_current()->recent_cpu_point = fp_add_complex(thread_current()->recent_cpu_point,1);
 	}
-
-	intr_set_level (old_level);
 }
 
 void refresh_all_thread_recent_cpu () {
