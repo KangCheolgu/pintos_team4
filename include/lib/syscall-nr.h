@@ -1,4 +1,4 @@
-#ifndef __LIB_SYSCALL_NR_H
+	#ifndef __LIB_SYSCALL_NR_H
 #define __LIB_SYSCALL_NR_H
 
 /* System call numbers. */

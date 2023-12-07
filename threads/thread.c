@@ -274,19 +274,23 @@ thread_create (const char *name, int priority,
 
 void
 thread_preemption(){
-	struct thread *a = thread_current();
-	struct list_elem *b_elem = list_begin(&ready_list);
-	struct thread *b = list_entry (b_elem, struct thread, elem);
-
-	if(thread_mlfqs){
-		if(thread_ticks % 4 == 0){
-			if(a->priority <= b->priority) thread_yield();
-		} else {
-			if(a->priority < b->priority) thread_yield();
+	struct thread *a;
+	struct list_elem *b_elem;
+	struct thread *b;
+	if(!list_empty(&ready_list) && !intr_context()){
+		a = thread_current();
+		b_elem = list_begin(&ready_list);
+		b = list_entry (b_elem, struct thread, elem);
+		if(thread_mlfqs){
+			if(thread_ticks % 4 == 0){
+				if(a->priority <= b->priority) thread_yield();
+			} else {
+				if(a->priority < b->priority) thread_yield();
+			}
 		}
-	}
 
-	if(a->priority < b->priority) thread_yield();
+		if(a->priority < b->priority) thread_yield();
+	}
 }
 
 
