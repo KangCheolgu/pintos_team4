@@ -16,6 +16,7 @@
 
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 
@@ -691,6 +692,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	// userprog
 	t->sys_stat = 0;
+	t->next_fd = 0;
+	for(int i = 0; i < 64; i++){
+		t->file_descripter_table[i] = 0;
+	}
 
 }
 

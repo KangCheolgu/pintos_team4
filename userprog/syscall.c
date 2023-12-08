@@ -10,6 +10,7 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+int fd = 2;
 
 /* System call.
  *
@@ -65,6 +66,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_REMOVE :
 
 	case SYS_OPEN :
+		f->R.rax = syscall_open(f->R.rdi);
+		break;
 
 	case SYS_FILESIZE :
 
@@ -73,7 +76,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_WRITE :
 		syscall_write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
-
+	case SYS_CLOSE :
+		syscall_close(f->R.rdi);
+		break;
 	}
 }
 
@@ -104,35 +109,55 @@ tid_t syscall_fork (const char *thread_name, struct intr_frame *f) {
 }
 
 bool syscall_create(char *file, unsigned initial_size){
-	// printf("file[0] : %s\n", file);
-	// printf("size of file[0] : %d\n", sizeof(file[0]));
-	// printf("initial_size : %d\n", initial_size);
-
 	// bad-pointer                  
 	if(!pml4_get_page(thread_current()->pml4, file)){
 		syscall_exit(-1);
-		return false;
 	}
-	// create-empty
-	// if(file[0] == NULL){
-	// 	syscall_exit(-1);
-	// 	return false;
-	// }
-	// // create long
-	// if(file[0] >= 120){
-	// 	return false;
-	// }
-	// // create-exist
 
 	return filesys_create(file, initial_size);
 
 }
+// 파일 디스크립터 반환 파일 디스크립터가 겹치면 안됨
+int syscall_open (const char *file) {
+	// printf("!!!!!!!!!!!!!!!!!!! %s\n" ,file);
+	// open-bad-ptr
+	if(!pml4_get_page(thread_current()->pml4, file)){
+		// printf("in ! pml get page\n");
+		syscall_exit(-1);
+	}
 
-// int
-// wait (pid_t pid) {
-// 	return syscall1 (SYS_WAIT, pid);
-// }
-// bool
-// create (const char *file, unsigned initial_size) {
-// 	return syscall2 (SYS_CREATE, file, initial_size);
-// }
+	// open-null
+	if(file == NULL){
+		// printf("in file == null\n");
+		return -1;
+	}
+
+	// open-empty
+	if(strlen(file) == 0){
+		// printf("in file == empty\n");
+		return -1;
+	}
+
+	struct file *_file = filesys_open (file);
+	// open-missing
+	if(_file == NULL){
+		// printf("in file == null\n");
+		return -1;
+	}
+	
+	
+	for(int i = 3; i < 64; i++){
+		if(	thread_current()->file_descripter_table [i] == NULL){
+			thread_current()->file_descripter_table [i] = thread_current()->name;
+			fd = i;
+			return fd;
+		}
+	}
+
+	return -1;
+
+}
+
+void syscall_close(int fd){
+	thread_current()->file_descripter_table[fd] = NULL;
+}

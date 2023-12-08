@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "synch.h"
 #include "threads/fixedpoint.h"
+#include "filesys/file.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -111,6 +112,8 @@ struct thread {
 // #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+	int next_fd;
+	struct file *file_descripter_table[64];
 // #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

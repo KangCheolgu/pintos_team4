@@ -211,9 +211,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	int cnt = 999999999*2;
-	while(cnt--){
-
+	int cnt = 999999999*3;
+	while(cnt != 0){
+		cnt--;
 	}
 	return -1;
 }

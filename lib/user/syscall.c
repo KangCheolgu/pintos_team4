@@ -1,8 +1,6 @@
 #include <syscall.h>
 #include <stdint.h>
 #include "../syscall-nr.h"
-#include "stdbool.h"
-
 
 __attribute__((always_inline))
 static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
@@ -82,7 +80,7 @@ exit (int status) {
 	NOT_REACHED ();
 }
 
-pid_t 
+pid_t
 fork (const char *thread_name){
 	return (pid_t) syscall1 (SYS_FORK, thread_name);
 }
