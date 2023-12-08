@@ -242,7 +242,6 @@ thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
-	printf("in thread create \n");
 
 	ASSERT (function != NULL);
 
@@ -689,6 +688,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// advanced scheduler
 	t->nice_point = 0;
 	t->recent_cpu_point = 0;
+
+	// userprog
+	t->sys_stat = 0;
 
 }
 

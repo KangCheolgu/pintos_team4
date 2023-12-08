@@ -4,6 +4,10 @@
         "interrupt.h": "c",
         "inttypes.h": "c",
         "fixedpoint.h": "c",
-        "tests.h": "c"
+        "tests.h": "c",
+        "syscall-nr.h": "c",
+        "types.h": "c",
+        "stdint.h": "c",
+        "intrinsic.h": "c"
     }
 }

@@ -42,14 +42,19 @@ tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
+	char *tmp;
+
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
+
+	tmp = strtok_r(file_name, " ", &file_name);
+
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (tmp, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -75,7 +80,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	return thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
-}
+} 
 
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
@@ -140,6 +145,7 @@ __do_fork (void *aux) {
 		goto error;
 #endif
 
+	// file_duplicate();
 	/* TODO: Your code goes here.
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
@@ -176,10 +182,9 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
-	uintptr_t PHYS_BASE = _if.rsp;
+	// uintptr_t PHYS_BASE = _if.rsp;
 	
-	hex_dump(_if.rsp , _if.rsp , USER_STACK - _if.rsp , true);
-
+	// hex_dump(_if.rsp , _if.rsp , USER_STACK - _if.rsp , true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -221,6 +226,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	printf("%s: exit(%d)\n" , curr -> name , curr->sys_stat);
 
 	process_cleanup ();
 }
@@ -474,14 +480,16 @@ load (const char *file_name, struct intr_frame *if_) {
 		memcpy(if_->rsp, &addr_arr[x] , 8);
 	}
 
-	// fake addr 넣기
-	if_->rsp -= 8;
+	
 
 	// Point %rsi to argv (the address of argv[0]) and set %rdi to argc
-	if_->R.rsi = USER_STACK - (eightn + (cnt+1)*8);
+	// if_->R.rsi = USER_STACK - (eightn + (cnt+1)*8);
+	if_->R.rsi = if_->rsp;
 	if_->R.rdi = cnt;
 
 	////////////////////////////* 인자 스택 푸쉬 끝 */////////////////////////////////
+	// fake addr 넣기
+	if_->rsp -= 8;
 
 	success = true;
 
@@ -640,26 +648,26 @@ install_page (void *upage, void *kpage, bool writable) {
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
    occurred. */
-static int
-get_user (const uint8_t *uaddr)
-{
-    int result;
-    asm ("movl $1f, %0; movzbl %1, %0; 1:"
-        : "=&a" (result) : "m" (*uaddr));
-    return result;
-}
+// static int
+// get_user (const uint8_t *uaddr)
+// {
+//     int result;
+//     asm ("movl $1f, %0; movzbl %1, %0; 1:"
+//         : "=&a" (result) : "m" (*uaddr));
+//     return result;
+// }
 
-/* Writes BYTE to user address UDST.
-   UDST must be below PHYS_BASE. 
-   Returns true if successful, false if a segfault occurred.*/
-static bool
-put_user (uint8_t *udst, uint8_t byte)
-{
-    int error_code;
-    asm ("movl $1f, %0; movb %b2, %1; 1:"
-        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-    return error_code != -1;
-}
+// /* Writes BYTE to user address UDST.
+//    UDST must be below PHYS_BASE. 
+//    Returns true if successful, false if a segfault occurred.*/
+// static bool
+// put_user (uint8_t *udst, uint8_t byte)
+// {
+//     int error_code;
+//     asm ("movl $1f, %0; movb %b2, %1; 1:"
+//         : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+//     return error_code != -1;
+// }
 
 #else
 /* From here, codes will be used after project 3.
