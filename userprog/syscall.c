@@ -7,6 +7,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys/filesys.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -146,11 +147,11 @@ int syscall_open (const char *file) {
 	}
 	
 	
-	for(int i = 3; i < 64; i++){
-		if(	thread_current()->file_descripter_table [i] == NULL){
-			thread_current()->file_descripter_table [i] = thread_current()->name;
-			fd = i;
-			return fd;
+	for(int i = 2; i < 64; i++){
+		if(thread_current()->file_descripter_table [i] == NULL){
+			thread_current()->file_descripter_table [i] = _file;
+			// printf("in open %d\n",i);
+			return i;
 		}
 	}
 
@@ -159,5 +160,17 @@ int syscall_open (const char *file) {
 }
 
 void syscall_close(int fd){
+	// printf("in close %d\n", fd);
+	// close-bad-fd
+	if(fd < 0 || fd > 63){
+		syscall_exit(-1);
+	}
+
+	if (thread_current()->file_descripter_table[fd] != NULL){
+		file_close(thread_current()->file_descripter_table[fd]);
+	} 
+
 	thread_current()->file_descripter_table[fd] = NULL;
+
 }
+
