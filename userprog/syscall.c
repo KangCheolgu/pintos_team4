@@ -63,6 +63,6 @@ void user_halt(void){
 	power_off();
 }
 
-// void user_exit(void){
-// 	thread_exit();
-// }
+void user_exit(void){
+	thread_exit();
+}
