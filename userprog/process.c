@@ -188,26 +188,13 @@ process_exec (void *f_name) {
 	/* parse */
 	token = strtok_r(file_name, " ", &saveptr);
 	// First call
-	printf("\nparse_argv[0] : %p // %s //  %d\n", parse_argv[0], parse_argv[0], strlen(token));
 	
-	// fffffffmemcpy(parse_argv[0], token, strlen(token));
-	// strlcpy(parse_argv[0], strtok_r(file_name, " ", &saveptr), sizeof(parse_argv[0]));
-	// strlcpy(token, parse_argv[0], sizeof(parse_argv[0]));
-	// Rest call
 	while(token!=NULL){
 		parse_argv[cnt_argc] = token;
-		//if(*saveptr=='\0')	saveptr++;		//공백 여러개 제거를 위해
 		token = strtok_r(NULL, " ", &saveptr);
-		printf("token : %p //// %s\n", token, token );
 		
-		//memcpy(parse_argv[cnt_argc],token, strlen(token));
 		cnt_argc++;
-		printf("while cnt : %d\n", cnt_argc);
 	}
-
-
-	printf("token : %s filename :  %s\n", token, file_name);
-	printf("%s ///// %s \n", parse_argv[0], parse_argv[1]);
 	
 	/* And then load the binary */
 	success = load (parse_argv[0], &_if);
@@ -229,12 +216,9 @@ void argument_stack(char** parse, int cnt_argc, struct intr_frame *_if){
 	//uintptr_t pad_align;
 	int* sp_addr_argv[64];
 	int total_length=0;
-
-	printf("cntcntcntcntcntcnt : %d\n", cnt_argc);
 	/* Push to stack parsed argument */
 	for(int i =cnt_argc-1; i>=0;i--){	
 		_if->rsp = _if->rsp - strlen(parse[i]) - 1;
-		printf("strlen : %d, total : %d!@@!@!", strlen(parse[i])+1, total_length);
 		total_length += strlen(parse[i])+1;
 
 		memcpy(_if->rsp, parse[i], strlen(parse[i])+1);
@@ -242,11 +226,8 @@ void argument_stack(char** parse, int cnt_argc, struct intr_frame *_if){
 	}
 
 	/* Push to stack alignment padding - rsp%8 : needed to add */
-	printf("totalll : %d\n", total_length);
 	pad_align = 8-(total_length % 8);
-	printf("!!!!!!!!!!!pad : %d\n", pad_align);
 	_if->rsp-=pad_align;
-	printf("flag\n");
 	//memcpy(_if->rsp, '\0', pad_align);
 
 	/* Push to stack null argv[cnt_argc] */
@@ -256,18 +237,13 @@ void argument_stack(char** parse, int cnt_argc, struct intr_frame *_if){
 	/* Push to stack argument sp address : size : 8 스택 포인터를 따로 저장해둬야 함. */
 	for(int i=cnt_argc-1; i>=0 ; i--){
 		_if->rsp-=8;
-		printf("sp_addr_argv[%d] : %p\n", i, &sp_addr_argv[i]);
 		memcpy(_if->rsp, &sp_addr_argv[i], 8);
 	}
-	printf("out of for\n");
 	/* Set RDI, RSI */
 	_if->R.rdi = cnt_argc;
-	_if->R.rsi = sp_addr_argv[0];
-	printf("flag\n");
+	_if->R.rsi = _if->rsp;
 	/* Push to stack fake return : size : 8 */
 	_if->rsp-=8;
-	//memcpy(_if->rsp, '\0', 8);
-	// 0이 아니라 null값 넣어줘야 함. 
 
 }
 
