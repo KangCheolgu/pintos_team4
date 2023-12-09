@@ -200,7 +200,7 @@ process_exec (void *f_name) {
 	success = load (parse_argv[0], &_if);
 	
 	argument_stack(parse_argv, cnt_argc, &_if);
-	hex_dump(_if.rsp ,_if.rsp,  USER_STACK - _if.rsp, true);
+	//hex_dump(_if.rsp ,_if.rsp,  USER_STACK - _if.rsp, true);
 	/* If load ,failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -261,7 +261,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	 int num = 999999999;
+	 int num = 99999999999;
 	 while(num--){
 	 }
 	return -1;
@@ -271,11 +271,10 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	/*TODO: Implement process termination message (see */
+	printf("%s: exit(%d)\n",curr->name, curr->exit_status);
+	// * TODO: project2/process_termination.html).
+	// * TODO: We recommend you to implement process resurce cleanup here. */
 	process_cleanup ();
 }
 

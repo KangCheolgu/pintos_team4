@@ -96,6 +96,7 @@ struct thread {
 	int awake_ticks;					// 일어나야할 시간
 	struct lock *wait_lock;				// 기다리는 락
 	struct list donated_threads;		// 기부해준 쓰레드들
+	int exit_status;
 
 
 	/* Shared between thread.c and synch.c. */

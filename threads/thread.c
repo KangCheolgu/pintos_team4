@@ -414,6 +414,7 @@ thread_exit (void) {
 	ASSERT (!intr_context ());
 
 #ifdef USERPROG
+	//printf("[2] thread_status : %d, exit_status : %d", thread_current()->status, thread_current()->exit_status);
 	process_exit ();
 #endif
 

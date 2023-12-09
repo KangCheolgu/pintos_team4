@@ -49,10 +49,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			user_halt();
 			break;
 		case SYS_EXIT:
-			thread_exit ();
+			user_exit (f->R.rdi);
 			break;
+		case SYS_CREATE:
+			user_create(f->R.rdi, f->R.rsi);
 	}
-	printf ("system call!\n");
 }
 
 void user_write(int fd, const void *buffer, unsigned size){
@@ -63,6 +64,15 @@ void user_halt(void){
 	power_off();
 }
 
-void user_exit(void){
+void user_exit(int status){
+	struct thread *curr = thread_current();
+	curr->exit_status = status;
+	//printf("[1] thread_status : %d, exit_status : %d", curr->status, curr->exit_status);
 	thread_exit();
+	//printf("[5] thread_status : %d, exit_status : %d", curr->status, curr->exit_status);
 }
+
+/*
+bool user_create (const char *file, unsigned initial_size) {
+	return filesys_create(file, initial_size);
+}*/
