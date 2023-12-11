@@ -264,7 +264,7 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-
+	t->next_fd = 2;
 	thread_unblock(t);
 	thread_preemption();
 	// 전체 스레드에 삽입
@@ -719,7 +719,6 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// advanced scheduler
 	t->nice_point = 0;
 	t->recent_cpu_point = 0;
-
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

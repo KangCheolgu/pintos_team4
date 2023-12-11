@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "threads/interrupt.h"
 #include "synch.h"
 #include "threads/fixedpoint.h"
@@ -107,6 +109,9 @@ struct thread {
 	int nice_point;						
 	fixedpoint recent_cpu_point;
 
+	/* For filedescriptor*/
+	struct file* fdt[64];
+	int next_fd;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
