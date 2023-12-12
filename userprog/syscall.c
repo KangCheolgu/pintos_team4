@@ -8,10 +8,13 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "filesys/filesys.h"
+#include "threads/palloc.h"
+
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 int fd = 2;
+typedef int pid_t;
 
 /* System call.
  *
@@ -44,7 +47,7 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-
+	printf("%d\n",f->R.rax);
 	switch(f->R.rax) {
 
 	case SYS_HALT :
@@ -57,9 +60,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	 	f->R.rax = syscall_fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC :
-
+		f->R.rax = syscall_exec(f->R.rdi);
+		break;
 	case SYS_WAIT :
-
+		f->R.rax = syscall_wait(f->R.rdi);
+		break;
 	case SYS_CREATE :
 		f->R.rax = syscall_create(f->R.rdi, f->R.rsi);
 		break;
@@ -69,13 +74,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_OPEN :
 		f->R.rax = syscall_open(f->R.rdi);
 		break;
-
 	case SYS_FILESIZE :
-
+		f->R.rax = syscall_filesize(f->R.rdi);
+		break;
 	case SYS_READ :
-
+		f->R.rax = syscall_read (f->R.rdi, f->R.rsi, f->R.rdx);
+		break;
 	case SYS_WRITE :
-		syscall_write(f->R.rdi, f->R.rsi, f->R.rdx);
+		f->R.rax = syscall_write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_CLOSE :
 		syscall_close(f->R.rdi);
@@ -87,6 +93,8 @@ void syscall_exit (int status)
 {
     struct thread *curr = thread_current (); 
 	curr->sys_stat = status; 
+	printf("%s: exit(%d)\n" , curr -> name , curr->sys_stat);
+
     thread_exit();
 }  
 
@@ -95,18 +103,30 @@ void syscall_halt (void)
     power_off();
 }
 
-void syscall_write (int _fd, const void *buffer, unsigned size) {
-	if(_fd == 1) printf("%s", buffer);
+// pml4_for_each (parent->pml4, duplicate_pte, parent)
+// %RBX, %RSP, %RBP와 %R12 - %R15 만 복사하라?
+pid_t syscall_fork (const char *thread_name, struct intr_frame *f) {
+	return process_fork(thread_name , f);
 }
 
-// pml4_for_each (parent->pml4, duplicate_pte, parent)
-// %RBX, %RSP, %RBP와 %R12 - %R15 만 복사하라
-tid_t syscall_fork (const char *thread_name, struct intr_frame *f) {
-	struct thread *curr = thread_current();
-	tid_t tid;
-	struct thread *child = process_fork(thread_name , f);
+int syscall_exec (const char *file_name) {
+	// bad-pointer                  
+	if(!pml4_get_page(thread_current()->pml4, file_name)){
+		syscall_exit(-1);
+	}
+	char *f_copy;
+	f_copy = palloc_get_page (0);
 
-	return child->tid;
+	/* Make a copy of FILE_NAME.
+	 * Otherwise there's a race between the caller and load(). */
+	strlcpy (f_copy, file_name, PGSIZE);
+	tid_t tid = process_exec (f_copy);
+
+	if(tid == -1){
+		syscall_exit(-1);
+	}
+
+	return tid;
 }
 
 bool syscall_create(char *file, unsigned initial_size){
@@ -120,7 +140,6 @@ bool syscall_create(char *file, unsigned initial_size){
 }
 // 파일 디스크립터 반환 파일 디스크립터가 겹치면 안됨
 int syscall_open (const char *file) {
-	// printf("!!!!!!!!!!!!!!!!!!! %s\n" ,file);
 	// open-bad-ptr
 	if(!pml4_get_page(thread_current()->pml4, file)){
 		// printf("in ! pml get page\n");
@@ -146,7 +165,6 @@ int syscall_open (const char *file) {
 		return -1;
 	}
 	
-	
 	for(int i = 2; i < 64; i++){
 		if(thread_current()->file_descripter_table [i] == NULL){
 			thread_current()->file_descripter_table [i] = _file;
@@ -160,8 +178,7 @@ int syscall_open (const char *file) {
 }
 
 void syscall_close(int fd){
-	// printf("in close %d\n", fd);
-	// close-bad-fd
+
 	if(fd < 0 || fd > 63){
 		syscall_exit(-1);
 	}
@@ -174,3 +191,56 @@ void syscall_close(int fd){
 
 }
 
+int syscall_read (int fd, void *buffer, unsigned size) {
+	printf("111111111111111111");
+	if(buffer == NULL) return -1; 
+
+	if(!pml4_get_page(thread_current()->pml4, buffer)) syscall_exit(-1);
+
+	if(fd < 0 || fd > 63) syscall_exit(-1);
+
+	if(fd == 1) syscall_exit(-1);
+
+	if(size < PGSIZE) syscall_exit(-1);
+
+	struct file *_file = thread_current()->file_descripter_table[fd];
+	int fd_filesize = syscall_filesize(fd);
+
+	int result = file_read (_file, buffer, size);
+
+	return result;
+}
+
+int syscall_filesize (int fd) {
+	return file_length(thread_current()->file_descripter_table[fd]);
+}
+
+
+int syscall_write (int fd, const void *buffer, unsigned size) {
+
+	if(!pml4_get_page(thread_current()->pml4, buffer)) syscall_exit(-1);
+
+	if(fd < 0 || fd > 63) syscall_exit(-1);
+
+	if(fd == 0) syscall_exit(-1);
+
+	if(fd == 1) putbuf(buffer, size);
+
+	if(thread_current()->file_descripter_table[fd] == NULL) return 0;
+
+	struct file *_file = thread_current()->file_descripter_table[fd];
+
+	return file_write (_file, buffer, size);
+}
+
+// pid 를 가진 프로세스가 종료 될 때까지 대기, 자식의 종료상태 가져옴 sys_stat
+// pid 가 살아있다면 해당 프로세스가 종료될때까지 기다립니다.
+// 종료 상태를 반환 sys stat
+// zj
+int
+syscall_wait (pid_t pid) {
+	// 만약 pid가 exit를 호출하지 않았지만 커널에 의해 종료되었다면, -1을 반환합니다.
+	// 부모 프로세스는 종료된 자식 프로세스에 대해 wait를 호출할 수 있습니다.
+	// 종료된 자식 프로세스의 종료 상태를 반환합니다.
+	return process_wait(pid);
+}

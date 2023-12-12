@@ -103,17 +103,26 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 	struct list_elem d_elem;			// 기부 쓰레드 연결 리스트용
+	struct list_elem c_elem;			// for child_list 
+	struct list_elem a_elem;			// for all_list 
 
 	// add in advanced scheduler
 	int nice_point;						
 	fixedpoint recent_cpu_point;
 
+	/* syscall */
+	struct thread *parent;
+	int next_fd;
+	struct file *file_descripter_table[64];
+	struct intr_frame for_copy; 
+	struct semaphore fork_sema;
+	struct semaphore wait_sema;
+	struct semaphore exit_sema;
+	struct list child_list;
 
 // #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-	int next_fd;
-	struct file *file_descripter_table[64];
 // #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -132,8 +141,6 @@ struct priority_list {
 };
 
 fixedpoint load_avg;
-
-
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -180,6 +187,9 @@ bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *au
 int calculate_priority(struct thread *curr);
 void refresh_all_thread_priority (void);
 fixedpoint calculate_ad_avg(void);
+
+struct thread *find_thread_for_tid(int tid);
+struct thread *find_child_for_tid(int tid);
 
 
 

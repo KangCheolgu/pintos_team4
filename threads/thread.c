@@ -19,7 +19,6 @@
 #include "filesys/file.h"
 #endif
 
-
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -32,6 +31,8 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list all_list;
+
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -73,6 +74,7 @@ bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *au
 
 #define f 16384
 
+int cnt = 0;
 
 typedef int32_t fixedpoint;
 
@@ -167,6 +169,7 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 	list_init (&sleep_list);
+	list_init (&all_list);
 
 	if(thread_mlfqs){
 		load_avg = 0;
@@ -241,6 +244,7 @@ thread_print_stats (void) {
 tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
+
 	struct thread *t;
 	tid_t tid;
 
@@ -266,9 +270,12 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	//강철구
+	list_push_back(&thread_current()->child_list, &t->c_elem);
+	t->parent = thread_current();
+
 	thread_unblock(t);
 	thread_preemption();
-	// 전체 스레드에 삽입
 
 	return tid;
 }
@@ -280,14 +287,6 @@ thread_preemption(){
 		struct list_elem *b_elem = list_begin(&ready_list);
 		struct thread *b = list_entry (b_elem, struct thread, elem);
 
-		// if(thread_mlfqs){
-		// 	if(thread_ticks % 4 == 0){
-		// 		if(a->priority <= b->priority) thread_yield();
-		// 	} else {
-		// 		if(a->priority < b->priority) thread_yield();
-		// 	}
-		// }
-		
 		if(a->priority < b->priority) thread_yield();
 	}
 }
@@ -692,9 +691,20 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	// userprog
 	t->sys_stat = 0;
-	t->next_fd = 0;
+	t->next_fd = NULL;
+
+	t->parent = NULL;
+	
+	sema_init(&t->fork_sema,0);
+	sema_init(&t->wait_sema,0);
+	sema_init(&t->exit_sema,0);
+
+	list_init(&t->child_list);
+
+	list_push_back(&all_list, &t->a_elem);
+
 	for(int i = 0; i < 64; i++){
-		t->file_descripter_table[i] = 0;
+		t->file_descripter_table[i] = NULL;
 	}
 
 }
@@ -891,16 +901,33 @@ bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *au
 	}
 }
 
-// bool cmp_awake_ticks (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED){
-	
-// 	ASSERT(a != NULL);
-// 	ASSERT(b != NULL);
-// 	struct thread *a_entry = list_entry (a, struct thread, elem);
-// 	struct thread *b_entry = list_entry (b, struct thread, elem);
+struct thread *find_thread_for_tid(int tid){
+	struct list_elem *ptr = list_begin(&all_list);
+	while(ptr != list_end(&all_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, a_elem);
+		if(curr->tid == tid) {
+			return curr;
+		}
+		ptr = list_next(ptr);
+	}
+}
 
-// 	if(a_entry->awake_ticks > b_entry->awake_ticks) {
-// 		return true;
-// 	} else {
-// 		return false;
-// 	}
-// }
+struct thread *find_child_for_tid(int tid){
+	struct list_elem *ptr = list_begin(&thread_current()->child_list);
+	struct thread *result;
+	int count = 0;
+	while(ptr != list_end(&thread_current()->child_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, c_elem);
+		if(curr->tid == tid) {
+			result = curr;
+			count++;
+		}
+		ptr = list_next(ptr);
+	}
+	if(count == 1){
+		return result;
+	} else {
+		return NULL;
+	}
+}
+
