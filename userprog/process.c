@@ -27,7 +27,9 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
-/* Lock used by process_fork(). */
+/* Lock used by file load(). */
+struct lock file_lock;	// 강철구
+
 
 /* General process initializer for initd and other process. */
 static void
@@ -258,7 +260,10 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	struct thread *curr = thread_current();
+
+	// lock_acquire(&thread_current()->child_lock);
 	struct thread *child = find_child_for_tid(child_tid);
+	// lock_release(&thread_current()->child_lock);
 
 	if (child == NULL) return -1;
 
@@ -266,9 +271,7 @@ process_wait (tid_t child_tid UNUSED) {
 	if (child->status == -1){
 		return -1;
 	}
-	// if (child->status == THREAD_DYING){
-	// 	return -1;
-	// }
+
 	sema_down(&child->wait_sema);
 
 	int sys_stat = child->sys_stat;
@@ -287,11 +290,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	// file_close(curr->current_file);
+
 
 	sema_up(&curr->wait_sema);
-
-	curr->parent->file_descripter_table[curr->tid] = NULL;
-
 	process_cleanup ();
 }
 
@@ -404,6 +406,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	lock_init(&file_lock);
 
 	char *ret_ptr;
     char *next_ptr;
@@ -418,12 +421,15 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	lock_acquire(&file_lock);
 	/* Open executable file. */
 	file = filesys_open (only_file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", only_file_name);
 		goto done2;
 	}
+
+	lock_release(&file_lock);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -554,9 +560,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	// fake addr 넣기
 	if_->rsp -= 8;
 	////////////////////////////* 인자 스택 푸쉬 끝 */////////////////////////////////
-	
+	// printf("file deny write\n");
 
 	success = true;
+	thread_current()->current_file = file;
 
 done:
 	/* We arrive here whether the load is successful or not. */

@@ -10,7 +10,8 @@
         "stdint.h": "c",
         "intrinsic.h": "c",
         "file.h": "c",
-        "main.h": "c"
+        "main.h": "c",
+        "inode.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

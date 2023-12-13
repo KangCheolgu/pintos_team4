@@ -10,7 +10,7 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-// #include "threads/fixedpoint.h"
+#include "threads/fixedpoint.h"
 
 #include "intrinsic.h"
 
@@ -32,7 +32,6 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 static struct list all_list;
-
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -694,12 +693,16 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->next_fd = NULL;
 
 	t->parent = NULL;
+	t->current_file = NULL;
 	
 	sema_init(&t->fork_sema,0);
 	sema_init(&t->wait_sema,0);
 	sema_init(&t->exit_sema,0);
 
 	list_init(&t->child_list);
+	list_init(&t->file_list);
+
+	// lock_init(&t->child_lock);
 
 	list_push_back(&all_list, &t->a_elem);
 

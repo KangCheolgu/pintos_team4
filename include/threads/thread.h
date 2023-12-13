@@ -119,6 +119,12 @@ struct thread {
 	struct semaphore wait_sema;
 	struct semaphore exit_sema;
 	struct list child_list;
+	/* ROX */
+	struct list file_list;
+	struct file *current_file;
+	/* syn */
+	struct lock *child_lock;	// 강철구
+
 
 // #ifdef USERPROG
 	/* Owned by userprog/process.c. */

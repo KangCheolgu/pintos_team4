@@ -9,6 +9,8 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "threads/palloc.h"
+#include "filesys/file.h"
+
 
 
 void syscall_entry (void);
@@ -30,6 +32,7 @@ typedef int pid_t;
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
 bool syscall_create(char *file, unsigned initial_size);
+bool syscall_remove (const char *file);
 
 void
 syscall_init (void) {
@@ -47,7 +50,7 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-	printf("%d\n",f->R.rax);
+	// printf("%d\n",f->R.rax);
 	switch(f->R.rax) {
 
 	case SYS_HALT :
@@ -68,9 +71,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_CREATE :
 		f->R.rax = syscall_create(f->R.rdi, f->R.rsi);
 		break;
-
 	case SYS_REMOVE :
-
+		f->R.rax = syscall_remove (f->R.rdi);
+		break;
 	case SYS_OPEN :
 		f->R.rax = syscall_open(f->R.rdi);
 		break;
@@ -86,6 +89,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_CLOSE :
 		syscall_close(f->R.rdi);
 		break;
+	case SYS_SEEK :
+		syscall_seek (f->R.rdi, f->R.rsi); 	
+		break;
 	}
 }
 
@@ -94,6 +100,13 @@ void syscall_exit (int status)
     struct thread *curr = thread_current (); 
 	curr->sys_stat = status; 
 	printf("%s: exit(%d)\n" , curr -> name , curr->sys_stat);
+	for(int i = 0; i < 64; i++){
+		if (curr->file_descripter_table[i] != NULL){
+			file_close(curr->file_descripter_table[i]);
+			curr->file_descripter_table[i] = NULL;
+		}
+	}
+	// file_close(curr->current_file);
 
     thread_exit();
 }  
@@ -109,9 +122,9 @@ pid_t syscall_fork (const char *thread_name, struct intr_frame *f) {
 	return process_fork(thread_name , f);
 }
 
-int syscall_exec (const char *file_name) {
+int syscall_exec (const char *cmd_line) {
 	// bad-pointer                  
-	if(!pml4_get_page(thread_current()->pml4, file_name)){
+	if(!pml4_get_page(thread_current()->pml4, cmd_line)){
 		syscall_exit(-1);
 	}
 	char *f_copy;
@@ -119,7 +132,7 @@ int syscall_exec (const char *file_name) {
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	strlcpy (f_copy, file_name, PGSIZE);
+	strlcpy (f_copy, cmd_line, PGSIZE);
 	tid_t tid = process_exec (f_copy);
 
 	if(tid == -1){
@@ -159,16 +172,20 @@ int syscall_open (const char *file) {
 	}
 
 	struct file *_file = filesys_open (file);
+
 	// open-missing
 	if(_file == NULL){
 		// printf("in file == null\n");
 		return -1;
 	}
-	
+
 	for(int i = 2; i < 64; i++){
-		if(thread_current()->file_descripter_table [i] == NULL){
+		if(thread_current()->file_descripter_table [i] == NULL) {
 			thread_current()->file_descripter_table [i] = _file;
-			// printf("in open %d\n",i);
+
+			if (strcmp (thread_current()->name, file) == false)
+          		file_deny_write (_file);
+
 			return i;
 		}
 	}
@@ -192,7 +209,6 @@ void syscall_close(int fd){
 }
 
 int syscall_read (int fd, void *buffer, unsigned size) {
-	printf("111111111111111111");
 	if(buffer == NULL) return -1; 
 
 	if(!pml4_get_page(thread_current()->pml4, buffer)) syscall_exit(-1);
@@ -201,10 +217,7 @@ int syscall_read (int fd, void *buffer, unsigned size) {
 
 	if(fd == 1) syscall_exit(-1);
 
-	if(size < PGSIZE) syscall_exit(-1);
-
 	struct file *_file = thread_current()->file_descripter_table[fd];
-	int fd_filesize = syscall_filesize(fd);
 
 	int result = file_read (_file, buffer, size);
 
@@ -217,18 +230,24 @@ int syscall_filesize (int fd) {
 
 
 int syscall_write (int fd, const void *buffer, unsigned size) {
-
 	if(!pml4_get_page(thread_current()->pml4, buffer)) syscall_exit(-1);
 
 	if(fd < 0 || fd > 63) syscall_exit(-1);
 
+	if(buffer == NULL) syscall_exit(-1);
+
 	if(fd == 0) syscall_exit(-1);
 
-	if(fd == 1) putbuf(buffer, size);
+	if(fd == 1){
+		putbuf(buffer,size);
+		return size;
+	} 
 
 	if(thread_current()->file_descripter_table[fd] == NULL) return 0;
 
 	struct file *_file = thread_current()->file_descripter_table[fd];
+
+	if (_file->deny_write) file_deny_write (_file);
 
 	return file_write (_file, buffer, size);
 }
@@ -243,4 +262,24 @@ syscall_wait (pid_t pid) {
 	// 부모 프로세스는 종료된 자식 프로세스에 대해 wait를 호출할 수 있습니다.
 	// 종료된 자식 프로세스의 종료 상태를 반환합니다.
 	return process_wait(pid);
+}
+
+void syscall_seek (int fd, unsigned position) {
+	struct file *tmp = thread_current()->file_descripter_table[fd];
+
+	file_seek(tmp, position);
+}
+
+bool syscall_remove (const char *file) {
+
+	if(!pml4_get_page(thread_current()->pml4, file)){
+		syscall_exit(-1);
+	}
+
+	char *f_copy;
+	f_copy = palloc_get_page (0);
+
+	strlcpy (f_copy, file, PGSIZE);
+
+	return filesys_remove(f_copy);
 }
