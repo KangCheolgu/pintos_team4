@@ -88,7 +88,6 @@ struct list_elem {
 	struct list_elem *prev;     /* Previous list element. */
 	struct list_elem *next;     /* Next list element. */
 };
-
 /* List. */
 struct list {
 	struct list_elem head;      /* List head. */

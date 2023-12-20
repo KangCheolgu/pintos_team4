@@ -125,6 +125,19 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	/* For fork() list */
+	struct thread* t_parent;
+	struct list t_child_list;
+	struct list_elem t_child_elem;
+	struct list_elem t_all_elem;
+	struct semaphore wait_sema;
+	struct semaphore exit_sema;
+	//struct semaphore exec_sema;
+	struct semaphore fork_sema;
+	struct intr_frame temp_if;
+	int wait_sema_cnt;
+	
 };
 
 

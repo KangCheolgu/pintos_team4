@@ -148,7 +148,9 @@ pdp_for_each (uint64_t *pdp,
 	return true;
 }
 
-/* Apply FUNC to each available pte entries including kernel's. */
+/* Apply FUNC to each available pte entries including kernel's.
+	커널을 포함한 각 사용 가능한 pte 항목에 FUNC 적용
+ */
 bool
 pml4_for_each (uint64_t *pml4, pte_for_each_func *func, void *aux) {
 	for (unsigned i = 0; i < PGSIZE / sizeof(uint64_t *); i++) {
@@ -222,7 +224,6 @@ pml4_activate (uint64_t *pml4) {
 void *
 pml4_get_page (uint64_t *pml4, const void *uaddr) {
 	ASSERT (is_user_vaddr (uaddr));
-
 	uint64_t *pte = pml4e_walk (pml4, (uint64_t) uaddr, 0);
 
 	if (pte && (*pte & PTE_P))
@@ -237,7 +238,13 @@ pml4_get_page (uint64_t *pml4, const void *uaddr) {
  * If WRITABLE is true, the new page is read/write;
  * otherwise it is read-only.
  * Returns true if successful, false if memory allocation
- * failed. */
+ * failed. 
+ * 사용자 가상 페이지 UPAGE에서 커널 가상 주소 KPAGE로 식별되는 물리적 프레임에 페이지
+ * 맵 레벨 4 PML4의 매핑을 추가합니다. UPAGE는 이미 매핑되어 있지 않아야 합니다.
+ * KPAGE는 palloc_get_page()가 있는 사용자 풀에서 가져온 페이지여야 합니다.
+ WRITABLE이 true이면 새 페이지가 읽기/쓰기되고, 그렇지 않으면 읽기 전용입니다. 
+ 성공하면 true를 반환하고, 메모리 할당이 실패하면 false를 반환합니다.
+ * */	
 bool
 pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) {
 	ASSERT (pg_ofs (upage) == 0);

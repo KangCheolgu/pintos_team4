@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdio.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -46,6 +47,10 @@ static struct list destruction_req;
 
 // blocked thread list 
 static struct list sleep_list;
+
+/* all_process_list */
+struct list t_all_list;
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -161,12 +166,13 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
 	list_init (&sleep_list);
-
+	list_init (&t_all_list);
+	
 	if(thread_mlfqs){
 		load_avg = 0;
 	}
@@ -184,7 +190,7 @@ void
 thread_start (void) {
 	/* Create the idle thread. */
 	struct semaphore idle_started;
-	sema_init (&idle_started, 0);
+	sema_init(&idle_started, 0);
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
@@ -264,7 +270,8 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	t->next_fd = 2;
+	
+	//list_push_back(&t_all_list, &t->t_all_elem);
 	thread_unblock(t);
 	thread_preemption();
 	// 전체 스레드에 삽입
@@ -715,10 +722,25 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// additonal values
 	t->origin_priority = priority;
 	list_init(&t->donated_threads);
+	list_init(&t->t_child_list);
+	sema_init (&t->wait_sema, 0);
+	sema_init (&t->exit_sema, 0);
+	sema_init (&t->fork_sema, 0);
+
+	/* 철구님 코드 */
+	list_push_back(&t_all_list, &t->t_all_elem);
+	for(int i=0; i<64;i++){
+		t->fdt[i] = NULL;
+	}
+
+	t->exit_status = 0;
+	t->t_parent = NULL;
+	t->wait_sema_cnt = 0;
 
 	// advanced scheduler
 	t->nice_point = 0;
 	t->recent_cpu_point = 0;
+	t->next_fd = 2;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -789,8 +811,8 @@ thread_launch (struct thread *th) {
 			"push %%rbx\n"
 			"push %%rcx\n"
 			/* Fetch input once */
-			"movq %0, %%rax\n"
-			"movq %1, %%rcx\n"
+			"movq %0, %%rax\n"    //전환 당하는 애
+			"movq %1, %%rcx\n"    //전환하는 애
 			"movq %%r15, 0(%%rax)\n"
 			"movq %%r14, 8(%%rax)\n"
 			"movq %%r13, 16(%%rax)\n"
@@ -878,6 +900,7 @@ schedule (void) {
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
 			list_push_back (&destruction_req, &curr->elem);
+			//list_remove(curr->);
 		}
 
 		/* Before switching the thread, we first save the information
@@ -913,16 +936,14 @@ bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *au
 	}
 }
 
-// bool cmp_awake_ticks (const struct list_elem *a,const struct list_elem *b, void *aux UNUSED){
-	
-// 	ASSERT(a != NULL);
-// 	ASSERT(b != NULL);
-// 	struct thread *a_entry = list_entry (a, struct thread, elem);
-// 	struct thread *b_entry = list_entry (b, struct thread, elem);
-
-// 	if(a_entry->awake_ticks > b_entry->awake_ticks) {
-// 		return true;
-// 	} else {
-// 		return false;
-// 	}
-// }
+/* 철구님 코드 */
+struct thread *find_thread_for_tid(int tid){
+	struct list_elem *ptr = list_begin(&t_all_list);
+	while(ptr != list_end(&t_all_list)) {
+		struct thread *curr = list_entry(ptr, struct thread, t_all_elem);
+		if(curr->tid == tid) {
+			return curr;
+		}
+		ptr = list_next(ptr);
+	}
+}

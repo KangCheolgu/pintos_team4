@@ -61,6 +61,9 @@ err:
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
+/* 주어진 보조 테이블 spt로부터 VA에 해당하는 struct page를 찾고 페이지를 리턴. 
+   에러상황에서, NULL 리턴. 
+*/
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
@@ -70,6 +73,9 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 }
 
 /* Insert PAGE into spt with validation. */
+/* 주어진 보조테이블 spt에 struct page 삽입.
+ * 주어진 spt테이블에 가상주소가 존재하는지 확인해야함.
+*/
 bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
@@ -118,7 +124,9 @@ vm_get_frame (void) {
 	return frame;
 }
 
-/* Growing the stack. */
+/* Growing the stack. 
+	스택 증가 
+*/
 static void
 vm_stack_growth (void *addr UNUSED) {
 }
@@ -134,6 +142,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
+	/* 스택 증가 식별 */
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
@@ -166,14 +175,22 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	/* TODO: Insert page table entry to map page's VA to frame's PA. 
+	* 페이지의 VA를 프레임의 PA에 매핑하기 위해 PTE를 삽입해라
+	*/
 
 	return swap_in (page, frame->kva);
 }
 
 /* Initialize new supplemental page table */
+/* 보조 페이지 테이블 초기화.
+ * 보조 페이지 테이블에 사용할 데이터 구조 선택.
+ * 이 함수는 새 프로세스가 시작될 때(userprog/process.c의 initd)에서 프로세스가 포크될 때
+ * (userprog/process.c의 __do_fork에서)호출
+ */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	
 }
 
 /* Copy supplemental page table from src to dst */

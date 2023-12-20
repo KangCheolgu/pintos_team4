@@ -77,6 +77,7 @@ sema_down (struct semaphore *sema) {
          cmp_priority, NULL);
 		thread_block ();
 	}
+   
 	sema->value--;
 	intr_set_level (old_level);
 }

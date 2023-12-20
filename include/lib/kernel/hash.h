@@ -33,7 +33,7 @@ struct hash_elem {
 /* Converts pointer to hash element HASH_ELEM into a pointer to
  * the structure that HASH_ELEM is embedded inside.  Supply the
  * name of the outer structure STRUCT and the member name MEMBER
- * of the hash element.  See the big comment at the top of the
+ * of the hash element.  See the big comment at the top of t
  * file for an example. */
 #define hash_entry(HASH_ELEM, STRUCT, MEMBER)                   \
 	((STRUCT *) ((uint8_t *) &(HASH_ELEM)->list_elem        \
