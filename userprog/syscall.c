@@ -15,8 +15,9 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-int fd = 2;
 typedef int pid_t;
+struct lock filesys_lock;
+
 
 /* System call.
  *
@@ -36,6 +37,10 @@ bool syscall_remove (const char *file);
 
 void
 syscall_init (void) {
+	lock_init(&filesys_lock);
+
+	lock_acquire(&filesys_lock);
+
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
@@ -45,6 +50,8 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+	lock_release(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -154,44 +161,29 @@ bool syscall_create(char *file, unsigned initial_size){
 // 파일 디스크립터 반환 파일 디스크립터가 겹치면 안됨
 int syscall_open (const char *file) {
 	// open-bad-ptr
-	if(!pml4_get_page(thread_current()->pml4, file)){
-		// printf("in ! pml get page\n");
-		syscall_exit(-1);
-	}
-
+	if(!pml4_get_page(thread_current()->pml4, file)) syscall_exit(-1);
 	// open-null
-	if(file == NULL){
-		// printf("in file == null\n");
-		return -1;
-	}
-
+	if(file == NULL) return -1;
 	// open-empty
-	if(strlen(file) == 0){
-		// printf("in file == empty\n");
-		return -1;
-	}
+	if(strlen(file) == 0) return -1;
 
 	struct file *_file = filesys_open (file);
-
 	// open-missing
-	if(_file == NULL){
-		// printf("in file == null\n");
-		return -1;
-	}
+	if(_file == NULL) return -1;
 
 	for(int i = 2; i < 64; i++){
 		if(thread_current()->file_descripter_table [i] == NULL) {
 			thread_current()->file_descripter_table [i] = _file;
-
+			printf("fd : %d\n", i);
+			printf("thread_current : %s\n",thread_current()->name);
+			printf("file : %s\n",file);
 			if (strcmp (thread_current()->name, file) == false)
           		file_deny_write (_file);
 
 			return i;
 		}
 	}
-
 	return -1;
-
 }
 
 void syscall_close(int fd){
@@ -219,8 +211,9 @@ int syscall_read (int fd, void *buffer, unsigned size) {
 
 	struct file *_file = thread_current()->file_descripter_table[fd];
 
+	lock_acquire(&filesys_lock);
 	int result = file_read (_file, buffer, size);
-
+	lock_release(&filesys_lock);
 	return result;
 }
 
@@ -247,9 +240,11 @@ int syscall_write (int fd, const void *buffer, unsigned size) {
 
 	struct file *_file = thread_current()->file_descripter_table[fd];
 
-	if (_file->deny_write) file_deny_write (_file);
+	lock_acquire(&filesys_lock);
+	int result = file_write (_file, buffer, size);
+	lock_release(&filesys_lock);
 
-	return file_write (_file, buffer, size);
+	return result;
 }
 
 // pid 를 가진 프로세스가 종료 될 때까지 대기, 자식의 종료상태 가져옴 sys_stat
@@ -283,3 +278,18 @@ bool syscall_remove (const char *file) {
 
 	return filesys_remove(f_copy);
 }
+
+// int
+// get_exit_child_process(pid_t pid){
+// 	struct thread * curr = thread_current();
+// 	struct list_elem *e;
+// 	struct exit_info * cur_info;
+// 	for (e = list_begin (&curr->exit_child_list); e != list_end (&curr->exit_child_list); e = list_next (e)){
+// 		cur_info = list_entry(e,struct exit_info,p_elem);
+// 		if(cur_info->pid == pid){
+// 			int i = cur_info->exit_status;
+// 			return i;
+// 		}
+// 	}
+// 	return -1; // not exist!
+// }

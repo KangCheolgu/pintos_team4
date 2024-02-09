@@ -123,7 +123,7 @@ struct thread {
 	struct list file_list;
 	struct file *current_file;
 	/* syn */
-	struct lock *child_lock;	// 강철구
+	struct lock child_lock;	// 강철구
 
 
 // #ifdef USERPROG
@@ -139,7 +139,6 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
-
 
 struct priority_list {
 	struct list *priority;

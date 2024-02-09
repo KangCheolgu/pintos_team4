@@ -256,19 +256,19 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
+
 	struct thread *curr = thread_current();
-
-	// lock_acquire(&thread_current()->child_lock);
 	struct thread *child = find_child_for_tid(child_tid);
-	// lock_release(&thread_current()->child_lock);
 
-	if (child == NULL) return -1;
+	if (child == NULL) {
+		// sema_up(&child->exit_sema);
+		return -1;
+	}
+		
 
 	
 	if (child->status == -1){
+		// sema_up(&cmakhild->exit_sema);
 		return -1;
 	}
 
@@ -277,7 +277,7 @@ process_wait (tid_t child_tid UNUSED) {
 	int sys_stat = child->sys_stat;
 	list_remove(&child->c_elem);
 
-	sema_up(&child->wait_sema);
+	sema_up(&child->exit_sema);
 
 	return sys_stat;
 }
@@ -294,6 +294,8 @@ process_exit (void) {
 
 
 	sema_up(&curr->wait_sema);
+	sema_down(&curr->exit_sema);
+
 	process_cleanup ();
 }
 
@@ -421,15 +423,14 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
-	lock_acquire(&file_lock);
 	/* Open executable file. */
 	file = filesys_open (only_file_name);
 	if (file == NULL) {
+
 		printf ("load: %s: open failed\n", only_file_name);
 		goto done2;
 	}
 
-	lock_release(&file_lock);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr

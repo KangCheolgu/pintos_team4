@@ -11,7 +11,8 @@
         "intrinsic.h": "c",
         "file.h": "c",
         "main.h": "c",
-        "inode.h": "c"
+        "inode.h": "c",
+        "off_t.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
