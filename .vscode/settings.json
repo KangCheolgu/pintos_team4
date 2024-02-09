@@ -3,6 +3,16 @@
         "*.inc": "c",
         "interrupt.h": "c",
         "inttypes.h": "c",
-        "fixedpoint.h": "c"
-    }
+        "fixedpoint.h": "c",
+        "tests.h": "c",
+        "syscall-nr.h": "c",
+        "types.h": "c",
+        "stdint.h": "c",
+        "intrinsic.h": "c",
+        "file.h": "c",
+        "main.h": "c",
+        "inode.h": "c",
+        "off_t.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

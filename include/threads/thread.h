@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "synch.h"
 #include "threads/fixedpoint.h"
+#include "filesys/file.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -96,21 +97,39 @@ struct thread {
 	int awake_ticks;					// 일어나야할 시간
 	struct lock *wait_lock;				// 기다리는 락
 	struct list donated_threads;		// 기부해준 쓰레드들
+	int sys_stat;
 
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 	struct list_elem d_elem;			// 기부 쓰레드 연결 리스트용
+	struct list_elem c_elem;			// for child_list 
+	struct list_elem a_elem;			// for all_list 
 
 	// add in advanced scheduler
 	int nice_point;						
 	fixedpoint recent_cpu_point;
 
+	/* syscall */
+	struct thread *parent;
+	int next_fd;
+	struct file *file_descripter_table[64];
+	struct intr_frame for_copy; 
+	struct semaphore fork_sema;
+	struct semaphore wait_sema;
+	struct semaphore exit_sema;
+	struct list child_list;
+	/* ROX */
+	struct list file_list;
+	struct file *current_file;
+	/* syn */
+	struct lock child_lock;	// 강철구
 
-#ifdef USERPROG
+
+// #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-#endif
+// #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
@@ -121,15 +140,12 @@ struct thread {
 	unsigned magic;                     /* Detects stack overflow. */
 };
 
-
 struct priority_list {
 	struct list *priority;
 	struct list_elem *p_elem;
 };
 
 fixedpoint load_avg;
-
-
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -176,6 +192,9 @@ bool cmp_priority (const struct list_elem *a,const struct list_elem *b, void *au
 int calculate_priority(struct thread *curr);
 void refresh_all_thread_priority (void);
 fixedpoint calculate_ad_avg(void);
+
+struct thread *find_thread_for_tid(int tid);
+struct thread *find_child_for_tid(int tid);
 
 
 
